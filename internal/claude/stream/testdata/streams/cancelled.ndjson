@@ -1,0 +1,2 @@
+{"type":"system.init","session_id":"sess-jkl012","uuid":"uuid-030","cwd":"/tmp/worktree","model":"claude-opus-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.113","output_style":"stream-json"}
+{"type":"assistant","session_id":"sess-jkl012","uuid":"uuid-031","message":{"model":"claude-opus-4-5","id":"msg-030","role":"assistant","content":[{"type":"text","text":"Starting implementation..."}],"usage":{"input_tokens":200,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":8,"service_tier":"standard"}}}

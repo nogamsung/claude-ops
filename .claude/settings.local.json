@@ -8,7 +8,29 @@
       "Bash(git branch *)",
       "Bash(git push *)",
       "Bash(git stash *)",
-      "Bash(git worktree *)"
+      "Bash(git worktree *)",
+      "Bash(claude --version)",
+      "Read(//private/tmp/**)",
+      "Bash(claude -p --output-format stream-json --verbose --dangerously-skip-permissions \"reply only the word: hi\")",
+      "Bash(go mod *)",
+      "Bash(go get *)",
+      "Bash(go test *)",
+      "Bash(sqlc generate *)",
+      "Bash(go build *)",
+      "Bash(go tool *)",
+      "Bash(swag init *)",
+      "Bash(go install *)",
+      "Bash(golangci-lint run *)",
+      "Bash(go vet *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh run *)",
+      "Bash(go list *)",
+      "Bash(awk '$2!=\"\" {print}')",
+      "Bash(sort -k2)",
+      "Bash(sed -n '45,55p' /Users/gs97ahn/Development/claude-ops/internal/claude/stream/parser.go)",
+      "Bash(sed -n '93,100p' /Users/gs97ahn/Development/claude-ops/internal/config/validate.go)",
+      "Bash(sed -n '5,60p' /Users/gs97ahn/Development/claude-ops/internal/domain/task.go)",
+      "Bash(sed -n '5,20p' /Users/gs97ahn/Development/claude-ops/internal/slack/interactions.go)"
     ]
   }
 }

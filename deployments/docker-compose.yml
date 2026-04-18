@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    image: scheduled-dev-agent:latest
+    restart: on-failure
+    ports:
+      # Bind to localhost only — expose via reverse proxy for Slack webhook
+      - "127.0.0.1:8787:8787"
+    env_file:
+      - ../.env
+    environment:
+      DB_PATH: /data/agent.db
+      CONFIG_PATH: /config/config.yaml
+    volumes:
+      # Persistent data
+      - ../data:/data
+      # Config
+      - ../config.example.yaml:/config/config.yaml:ro
+      # Prompt templates
+      - ../prompts:/prompts:ro
+      # Worktrees (must be RW — Claude modifies files here)
+      - ../.worktrees:/worktrees
+      # Claude Code session (read-only — user must run `claude login` on host first)
+      - ${HOME}/.claude:/root/.claude:ro
+      # GitHub CLI auth (read-only)
+      - ${HOME}/.config/gh:/root/.config/gh:ro
+      # git config
+      - ${HOME}/.gitconfig:/root/.gitconfig:ro
+      # claude and gh binaries from host
+      - /usr/local/bin/claude:/usr/local/bin/claude:ro
+      - /usr/local/bin/gh:/usr/local/bin/gh:ro

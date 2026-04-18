@@ -1,0 +1,84 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    errcheck:
+      check-type-assertions: false
+    revive:
+      rules:
+        - name: exported
+          severity: warning
+        - name: var-naming
+          severity: warning
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - unparam
+      - path: db/sqlc/
+        linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - staticcheck
+          - unused
+          - misspell
+          - revive
+          - unconvert
+          - unparam
+          - whitespace
+      - path: docs/
+        linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - staticcheck
+          - unused
+          - misspell
+          - revive
+          - unconvert
+          - unparam
+          - whitespace
+      - path: mocks/
+        linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - staticcheck
+          - unused
+          - misspell
+          - revive
+          - unconvert
+          - unparam
+          - whitespace
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/gs97ahn/scheduled-dev-agent
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

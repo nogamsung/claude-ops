@@ -1,0 +1,21 @@
+with-expecter: true
+packages:
+  github.com/gs97ahn/scheduled-dev-agent/internal/domain:
+    interfaces:
+      TaskRepository:
+      TaskEventRepository:
+      AppStateRepository:
+  github.com/gs97ahn/scheduled-dev-agent/internal/scheduler:
+    interfaces:
+      SlackNotifier:
+      PRCreator:
+      Poller:
+      WorkerRunner:
+  github.com/gs97ahn/scheduled-dev-agent/internal/github:
+    interfaces:
+      IssuesService:
+      GhRunner:
+  github.com/gs97ahn/scheduled-dev-agent/internal/claude:
+    interfaces:
+      Canceller:
+      WindowGate:

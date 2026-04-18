@@ -1,0 +1,127 @@
+// Package config loads and validates application configuration.
+package config
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
+)
+
+// Config is the root application configuration.
+type Config struct {
+	Runtime   RuntimeConfig   `mapstructure:"runtime"`
+	Scheduler SchedulerConfig `mapstructure:"scheduler"`
+	GitHub    GitHubConfig    `mapstructure:"github"`
+	Slack     SlackConfig     `mapstructure:"slack"`
+}
+
+// RuntimeConfig holds server and storage settings.
+type RuntimeConfig struct {
+	HTTPBindAddr string        `mapstructure:"http_bind_addr"`
+	DBPath       string        `mapstructure:"db_path"`
+	LogLevel     string        `mapstructure:"log_level"`
+	TickInterval time.Duration `mapstructure:"tick_interval"`
+	WorktreeRoot string        `mapstructure:"worktree_root"`
+	PromptsDir   string        `mapstructure:"prompts_dir"`
+}
+
+// SchedulerConfig defines active time windows.
+type SchedulerConfig struct {
+	ActiveWindows []WindowConfig `mapstructure:"active_windows"`
+}
+
+// WindowConfig is a single active window definition from YAML.
+type WindowConfig struct {
+	Days  []string `mapstructure:"days"`
+	Start string   `mapstructure:"start"`
+	End   string   `mapstructure:"end"`
+	TZ    string   `mapstructure:"tz"`
+}
+
+// GitHubConfig holds GitHub integration settings.
+type GitHubConfig struct {
+	PollInterval time.Duration `mapstructure:"poll_interval"`
+	Repos        []RepoConfig  `mapstructure:"repos"`
+}
+
+// RepoConfig is a single allowlisted repository.
+type RepoConfig struct {
+	Name          string       `mapstructure:"name"`
+	DefaultBranch string       `mapstructure:"default_branch"`
+	Labels        []string     `mapstructure:"labels"`
+	Reviewers     []string     `mapstructure:"reviewers"`
+	Checks        ChecksConfig `mapstructure:"checks"`
+}
+
+// ChecksConfig flags which additional analysis types are enabled per repo.
+type ChecksConfig struct {
+	Security bool `mapstructure:"security"`
+	Perf     bool `mapstructure:"perf"`
+}
+
+// SlackConfig holds Slack integration settings.
+type SlackConfig struct {
+	ChannelID     string `mapstructure:"channel_id"`
+	MentionUserID string `mapstructure:"mention_user_id"`
+}
+
+// Env holds sensitive values loaded from environment variables.
+type Env struct {
+	GitHubToken        string
+	SlackBotToken      string
+	SlackSigningSecret string
+}
+
+// Load reads the YAML config file, loads .env from the working directory (if present),
+// and returns a fully populated Config.
+func Load(path string) (*Config, error) {
+	// Best-effort .env load; ignore error if file doesn't exist.
+	_ = godotenv.Load()
+
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.AutomaticEnv()
+
+	// Defaults
+	v.SetDefault("runtime.http_bind_addr", "127.0.0.1:8787")
+	v.SetDefault("runtime.db_path", "data/agent.db")
+	v.SetDefault("runtime.log_level", "info")
+	v.SetDefault("runtime.tick_interval", "30s")
+	v.SetDefault("runtime.worktree_root", ".worktrees")
+	v.SetDefault("runtime.prompts_dir", "prompts")
+	v.SetDefault("github.poll_interval", "60s")
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("read config %q: %w", path, err)
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	// Override from env where applicable.
+	if addr := os.Getenv("HTTP_BIND_ADDR"); addr != "" {
+		cfg.Runtime.HTTPBindAddr = addr
+	}
+	if dbPath := os.Getenv("DB_PATH"); dbPath != "" {
+		cfg.Runtime.DBPath = dbPath
+	}
+
+	return &cfg, nil
+}
+
+// LoadEnv loads sensitive settings from environment variables.
+func LoadEnv() (*Env, error) {
+	_ = godotenv.Load()
+
+	env := &Env{
+		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
+		SlackBotToken:      os.Getenv("SLACK_BOT_TOKEN"),
+		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
+	}
+	return env, nil
+}
