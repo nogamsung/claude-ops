@@ -70,9 +70,9 @@ type SlackConfig struct {
 
 // Env holds sensitive values loaded from environment variables.
 type Env struct {
-	GitHubToken         string
-	SlackBotToken       string
-	SlackSigningSecret  string
+	GitHubToken        string
+	SlackBotToken      string
+	SlackSigningSecret string
 }
 
 // Load reads the YAML config file, loads .env from the working directory (if present),

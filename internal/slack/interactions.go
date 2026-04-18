@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// ActionID is the identifier for interactive Slack button actions.
+// ActionIDStopTask is the action_id emitted by the Slack "Stop" button.
 const ActionIDStopTask = "stop_task"
 
 // TaskCanceller can cancel a task by ID.

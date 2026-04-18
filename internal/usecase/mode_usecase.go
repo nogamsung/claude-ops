@@ -11,8 +11,8 @@ import (
 
 // FullModeState represents the persisted full-mode configuration.
 type FullModeState struct {
-	Enabled   bool       `json:"enabled"`
-	Since     *time.Time `json:"since,omitempty"`
+	Enabled bool       `json:"enabled"`
+	Since   *time.Time `json:"since,omitempty"`
 }
 
 // ModeUseCase manages the full-usage-mode state.

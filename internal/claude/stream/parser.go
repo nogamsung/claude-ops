@@ -45,6 +45,8 @@ type Signal struct {
 // SignalKind distinguishes between signal types.
 type SignalKind int
 
+// SignalText, SignalUsageWarning, SignalResult, and SignalRateLimit classify
+// NDJSON events emitted by the Claude Code CLI stream.
 const (
 	SignalText SignalKind = iota
 	SignalUsageWarning

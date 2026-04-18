@@ -13,24 +13,24 @@ import (
 
 // gormTask is the GORM model for the tasks table.
 type gormTask struct {
-	ID                    string    `gorm:"column:id;primaryKey"`
-	RepoFullName          string    `gorm:"column:repo_full_name"`
-	IssueNumber           int       `gorm:"column:issue_number"`
-	IssueTitle            string    `gorm:"column:issue_title"`
-	TaskType              string    `gorm:"column:task_type"`
-	Status                string    `gorm:"column:status"`
-	PromptTemplate        string    `gorm:"column:prompt_template"`
-	WorktreePath          string    `gorm:"column:worktree_path"`
-	PRURL                 string    `gorm:"column:pr_url"`
-	PRNumber              int       `gorm:"column:pr_number"`
+	ID                    string     `gorm:"column:id;primaryKey"`
+	RepoFullName          string     `gorm:"column:repo_full_name"`
+	IssueNumber           int        `gorm:"column:issue_number"`
+	IssueTitle            string     `gorm:"column:issue_title"`
+	TaskType              string     `gorm:"column:task_type"`
+	Status                string     `gorm:"column:status"`
+	PromptTemplate        string     `gorm:"column:prompt_template"`
+	WorktreePath          string     `gorm:"column:worktree_path"`
+	PRURL                 string     `gorm:"column:pr_url"`
+	PRNumber              int        `gorm:"column:pr_number"`
 	StartedAt             *time.Time `gorm:"column:started_at"`
 	FinishedAt            *time.Time `gorm:"column:finished_at"`
-	EstimatedInputTokens  int       `gorm:"column:estimated_input_tokens"`
-	EstimatedOutputTokens int       `gorm:"column:estimated_output_tokens"`
-	ExitCode              *int      `gorm:"column:exit_code"`
-	StderrTail            string    `gorm:"column:stderr_tail"`
-	CreatedAt             time.Time `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt             time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	EstimatedInputTokens  int        `gorm:"column:estimated_input_tokens"`
+	EstimatedOutputTokens int        `gorm:"column:estimated_output_tokens"`
+	ExitCode              *int       `gorm:"column:exit_code"`
+	StderrTail            string     `gorm:"column:stderr_tail"`
+	CreatedAt             time.Time  `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt             time.Time  `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (gormTask) TableName() string { return "tasks" }

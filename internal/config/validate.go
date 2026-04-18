@@ -94,7 +94,7 @@ func (c *Config) ActiveWindows() ([]*domain.ActiveWindow, error) {
 	return out, nil
 }
 
-// ParseTickInterval parses the TickInterval string into a time.Duration.
+// ParseDuration parses a duration string into a time.Duration.
 func ParseDuration(s string) (time.Duration, error) {
 	d, err := time.ParseDuration(s)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 
 	gh "github.com/google/go-github/v60/github"
 	"github.com/google/uuid"
+
 	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
 	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
 )

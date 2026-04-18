@@ -30,7 +30,7 @@ type TaskResponse struct {
 // TaskDetailResponse includes task details plus recent events.
 type TaskDetailResponse struct {
 	TaskResponse
-	StderrTail string          `json:"stderr_tail,omitempty"`
+	StderrTail string              `json:"stderr_tail,omitempty"`
 	Events     []TaskEventResponse `json:"events,omitempty"`
 }
 

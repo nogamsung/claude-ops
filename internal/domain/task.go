@@ -6,6 +6,8 @@ import "time"
 // TaskStatus represents the lifecycle state of a task.
 type TaskStatus string
 
+// TaskStatusQueued, TaskStatusRunning, TaskStatusDone, TaskStatusFailed, and
+// TaskStatusCancelled enumerate the task lifecycle states.
 const (
 	TaskStatusQueued    TaskStatus = "queued"
 	TaskStatusRunning   TaskStatus = "running"
@@ -17,6 +19,8 @@ const (
 // TaskType represents the category of work a task performs.
 type TaskType string
 
+// TaskTypeFeature, TaskTypeSecurity, and TaskTypePerf enumerate the kinds of
+// work a task can perform.
 const (
 	TaskTypeFeature  TaskType = "feature"
 	TaskTypeSecurity TaskType = "security"
@@ -25,29 +29,31 @@ const (
 
 // Task is the central aggregate of the scheduler system.
 type Task struct {
-	ID                     string
-	RepoFullName           string
-	IssueNumber            int
-	IssueTitle             string
-	TaskType               TaskType
-	Status                 TaskStatus
-	PromptTemplate         string
-	WorktreePath           string
-	PRURL                  string
-	PRNumber               int
-	StartedAt              *time.Time
-	FinishedAt             *time.Time
-	EstimatedInputTokens   int
-	EstimatedOutputTokens  int
-	ExitCode               *int
-	StderrTail             string
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
+	ID                    string
+	RepoFullName          string
+	IssueNumber           int
+	IssueTitle            string
+	TaskType              TaskType
+	Status                TaskStatus
+	PromptTemplate        string
+	WorktreePath          string
+	PRURL                 string
+	PRNumber              int
+	StartedAt             *time.Time
+	FinishedAt            *time.Time
+	EstimatedInputTokens  int
+	EstimatedOutputTokens int
+	ExitCode              *int
+	StderrTail            string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 // EventKind is the type of a task lifecycle event.
 type EventKind string
 
+// EventKindStarted and its siblings enumerate the kinds of task lifecycle
+// events recorded by the scheduler.
 const (
 	EventKindStarted           EventKind = "started"
 	EventKindSlackSent         EventKind = "slack_sent"

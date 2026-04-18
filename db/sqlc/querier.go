@@ -18,24 +18,24 @@ type ListTasksParams struct {
 
 // ListTasksRow is a single row returned by ListTasks.
 type ListTasksRow struct {
-	ID                    string         `json:"id"`
-	RepoFullName          string         `json:"repo_full_name"`
-	IssueNumber           int64          `json:"issue_number"`
-	IssueTitle            string         `json:"issue_title"`
-	TaskType              string         `json:"task_type"`
-	Status                string         `json:"status"`
-	PromptTemplate        string         `json:"prompt_template"`
-	WorktreePath          string         `json:"worktree_path"`
-	PrURL                 string         `json:"pr_url"`
-	PrNumber              int64          `json:"pr_number"`
-	StartedAt             sql.NullTime   `json:"started_at"`
-	FinishedAt            sql.NullTime   `json:"finished_at"`
-	EstimatedInputTokens  int64          `json:"estimated_input_tokens"`
-	EstimatedOutputTokens int64          `json:"estimated_output_tokens"`
-	ExitCode              sql.NullInt64  `json:"exit_code"`
-	StderrTail            string         `json:"stderr_tail"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
+	ID                    string        `json:"id"`
+	RepoFullName          string        `json:"repo_full_name"`
+	IssueNumber           int64         `json:"issue_number"`
+	IssueTitle            string        `json:"issue_title"`
+	TaskType              string        `json:"task_type"`
+	Status                string        `json:"status"`
+	PromptTemplate        string        `json:"prompt_template"`
+	WorktreePath          string        `json:"worktree_path"`
+	PrURL                 string        `json:"pr_url"`
+	PrNumber              int64         `json:"pr_number"`
+	StartedAt             sql.NullTime  `json:"started_at"`
+	FinishedAt            sql.NullTime  `json:"finished_at"`
+	EstimatedInputTokens  int64         `json:"estimated_input_tokens"`
+	EstimatedOutputTokens int64         `json:"estimated_output_tokens"`
+	ExitCode              sql.NullInt64 `json:"exit_code"`
+	StderrTail            string        `json:"stderr_tail"`
+	CreatedAt             time.Time     `json:"created_at"`
+	UpdatedAt             time.Time     `json:"updated_at"`
 }
 
 // CountTasksByStatusRow holds a status and its count.

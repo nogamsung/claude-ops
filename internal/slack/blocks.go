@@ -54,9 +54,9 @@ func BuildStarted(taskID, repoFullName string, issueNumber int, issueURL string)
 						ActionID: "stop_task",
 					},
 					{
-						Type:  "button",
-						Text:  &TextObj{Type: "plain_text", Text: "View Issue"},
-						URL:   issueURL,
+						Type: "button",
+						Text: &TextObj{Type: "plain_text", Text: "View Issue"},
+						URL:  issueURL,
 					},
 				},
 			},

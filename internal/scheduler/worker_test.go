@@ -46,7 +46,6 @@ func (p *fakePRCreator) CreatePR(_ context.Context, _ *domain.Task) (string, int
 	return "https://github.com/owner/repo/pull/1", 1, nil
 }
 
-
 func TestWorker_TaskFails_IfPromptDirMissing(t *testing.T) {
 	taskRepo := &fakeTaskRepo{}
 	task := &domain.Task{
@@ -63,11 +62,11 @@ func TestWorker_TaskFails_IfPromptDirMissing(t *testing.T) {
 		TaskRepo:  taskRepo,
 		EventRepo: &fakeEventRepo{},
 		// Runner is nil, PromptsDir is empty — prompt render will fail.
-		Slack:      slackNotifier,
-		PRCreator:  &fakePRCreator{},
-		Clock:      &scheduler.FakeClock{T: time.Now()},
+		Slack:        slackNotifier,
+		PRCreator:    &fakePRCreator{},
+		Clock:        &scheduler.FakeClock{T: time.Now()},
 		WorktreeRoot: t.TempDir(),
-		PromptsDir: "/nonexistent_prompts_dir",
+		PromptsDir:   "/nonexistent_prompts_dir",
 	})
 
 	// The worker will fail at worktree creation (git not available in test env).

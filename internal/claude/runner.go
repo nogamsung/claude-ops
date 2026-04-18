@@ -31,14 +31,14 @@ type RunInput struct {
 
 // RunResult summarises the outcome of a claude CLI invocation.
 type RunResult struct {
-	TextOutput            string
-	InputTokens           int
-	OutputTokens          int
-	CacheReadInputTokens  int
-	TotalCostUSD          float64
-	DurationMS            int64
-	ExitCode              int
-	StderrTail            string
+	TextOutput           string
+	InputTokens          int
+	OutputTokens         int
+	CacheReadInputTokens int
+	TotalCostUSD         float64
+	DurationMS           int64
+	ExitCode             int
+	StderrTail           string
 }
 
 // ExecCommandFunc is a hook for injecting a fake exec.Cmd in tests.

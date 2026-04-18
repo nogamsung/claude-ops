@@ -20,7 +20,7 @@ type IssueCtx struct {
 
 // PromptData is the full context available inside all prompt templates.
 type PromptData struct {
-	Repo       string   // "owner/name"
+	Repo       string // "owner/name"
 	Issue      IssueCtx
 	Branch     string // e.g. "claude/issue-123"
 	BaseBranch string // e.g. "main"

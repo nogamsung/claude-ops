@@ -17,9 +17,9 @@ type SystemInit struct {
 	Model          string `json:"model"`
 	PermissionMode string `json:"permissionMode"`
 	// APIKeySource must be "none" for a subscription (Claude login) session.
-	APIKeySource   string `json:"apiKeySource"`
-	ClaudeCodeVer  string `json:"claude_code_version"`
-	OutputStyle    string `json:"output_style"`
+	APIKeySource  string `json:"apiKeySource"`
+	ClaudeCodeVer string `json:"claude_code_version"`
+	OutputStyle   string `json:"output_style"`
 }
 
 // AssistantEvent is emitted for each assistant turn.
@@ -59,19 +59,19 @@ type RateLimitEvent struct {
 
 // ResultEvent is emitted exactly once when Claude finishes.
 type ResultEvent struct {
-	Subtype          string                `json:"subtype"` // "success" | "error" | "error_during_execution"
-	IsError          bool                  `json:"is_error"`
-	APIErrorStatus   *string               `json:"api_error_status"`
-	DurationMS       int64                 `json:"duration_ms"`
-	DurationAPIMS    int64                 `json:"duration_api_ms"`
-	NumTurns         int                   `json:"num_turns"`
-	Result           string                `json:"result"`
-	StopReason       string                `json:"stop_reason"`    // "end_turn" | ...
-	TotalCostUSD     float64               `json:"total_cost_usd"`
-	Usage            ResultUsage           `json:"usage"`
-	ModelUsage       map[string]ModelUsage `json:"modelUsage"`
-	PermissionDenials []PermissionDenial   `json:"permission_denials"`
-	TerminalReason   string                `json:"terminal_reason"` // "completed" | "interrupted" | ...
+	Subtype           string                `json:"subtype"` // "success" | "error" | "error_during_execution"
+	IsError           bool                  `json:"is_error"`
+	APIErrorStatus    *string               `json:"api_error_status"`
+	DurationMS        int64                 `json:"duration_ms"`
+	DurationAPIMS     int64                 `json:"duration_api_ms"`
+	NumTurns          int                   `json:"num_turns"`
+	Result            string                `json:"result"`
+	StopReason        string                `json:"stop_reason"` // "end_turn" | ...
+	TotalCostUSD      float64               `json:"total_cost_usd"`
+	Usage             ResultUsage           `json:"usage"`
+	ModelUsage        map[string]ModelUsage `json:"modelUsage"`
+	PermissionDenials []PermissionDenial    `json:"permission_denials"`
+	TerminalReason    string                `json:"terminal_reason"` // "completed" | "interrupted" | ...
 }
 
 // ResultUsage holds aggregate token usage from the result event.
