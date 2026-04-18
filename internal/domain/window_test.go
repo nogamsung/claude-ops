@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 func makeWindow(t *testing.T, days []string, start, end, tz string) *domain.ActiveWindow {

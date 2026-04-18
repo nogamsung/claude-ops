@@ -9,7 +9,7 @@ docs/swagger/
 
 # Binary
 bin/
-/scheduled-dev-agent
+/claude-ops
 
 # Environment
 .env

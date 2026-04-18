@@ -7,9 +7,9 @@ import (
 
 	gh "github.com/google/go-github/v60/github"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	igithub "github.com/gs97ahn/scheduled-dev-agent/internal/github"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	igithub "github.com/gs97ahn/claude-ops/internal/github"
 )
 
 // fakeIssuesService implements IssuesService.

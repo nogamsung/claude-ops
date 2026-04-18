@@ -1,8 +1,8 @@
-# scheduled-dev-agent
+# Claude Ops
 
 홈서버/VPS 상주 Go 단일 바이너리. GitHub 이슈를 Claude Code CLI로 자동 처리 → PR 생성.
 
-PRD: [`docs/specs/scheduled-dev-agent.md`](docs/specs/scheduled-dev-agent.md)
+PRD: [`docs/specs/claude-ops.md`](docs/specs/claude-ops.md)
 
 ---
 
@@ -38,7 +38,7 @@ vim config.yaml  # active_windows, repos 설정
 # 실행
 make run
 # 또는
-./bin/scheduled-dev-agent -config config.yaml
+./bin/claude-ops -config config.yaml
 ```
 
 ### API 사용 예시

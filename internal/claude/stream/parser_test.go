@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/claude/stream"
+	"github.com/gs97ahn/claude-ops/internal/claude/stream"
 )
 
 func parseFixture(t *testing.T, name string) ([]stream.Signal, error) {

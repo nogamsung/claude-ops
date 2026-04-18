@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/slack"
+	"github.com/gs97ahn/claude-ops/internal/slack"
 )
 
 // TaskCancellerAPI is the interface used by the Slack handler to stop tasks.

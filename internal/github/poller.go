@@ -10,8 +10,8 @@ import (
 	gh "github.com/google/go-github/v60/github"
 	"github.com/google/uuid"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 // IssuesService abstracts the GitHub issues API for testing.

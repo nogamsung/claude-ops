@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/claude"
+	"github.com/gs97ahn/claude-ops/internal/claude"
 )
 
 func TestRenderPrompt_Feature(t *testing.T) {

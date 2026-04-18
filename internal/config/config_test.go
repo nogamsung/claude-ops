@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/config"
 )
 
 func writeTemp(t *testing.T, content string) string {

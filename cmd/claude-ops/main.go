@@ -1,6 +1,6 @@
-// Package main is the entrypoint for the scheduled-dev-agent binary.
+// Package main is the entrypoint for the claude-ops binary.
 //
-//	@title          scheduled-dev-agent API
+//	@title          Claude Ops API
 //	@version        1.0
 //	@description    GitHub issue to PR automation agent with active-window scheduling.
 //	@BasePath       /
@@ -25,15 +25,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/api"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/claude"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	igithub "github.com/gs97ahn/scheduled-dev-agent/internal/github"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/repository"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/scheduler"
-	islack "github.com/gs97ahn/scheduled-dev-agent/internal/slack"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/api"
+	"github.com/gs97ahn/claude-ops/internal/claude"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	igithub "github.com/gs97ahn/claude-ops/internal/github"
+	"github.com/gs97ahn/claude-ops/internal/repository"
+	"github.com/gs97ahn/claude-ops/internal/scheduler"
+	islack "github.com/gs97ahn/claude-ops/internal/slack"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"

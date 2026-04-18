@@ -13,8 +13,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/claude"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/claude"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 // SlackNotifier sends task lifecycle notifications to Slack.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
 func TestModeUseCase_GetFullMode_Default(t *testing.T) {

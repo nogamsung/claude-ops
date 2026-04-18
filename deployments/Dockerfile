@@ -22,8 +22,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
       -X main.Version=${VERSION} \
       -X main.Commit=${COMMIT} \
       -X main.BuildDate=${BUILD_DATE}" \
-    -o /bin/scheduled-dev-agent \
-    ./cmd/scheduled-dev-agent/
+    -o /bin/claude-ops \
+    ./cmd/claude-ops/
 
 # --- Runtime stage ---
 FROM alpine:3.19
@@ -38,7 +38,7 @@ RUN apk add --no-cache \
  && addgroup -S agent \
  && adduser -S agent -G agent
 
-COPY --from=builder /bin/scheduled-dev-agent /usr/local/bin/scheduled-dev-agent
+COPY --from=builder /bin/claude-ops /usr/local/bin/claude-ops
 
 # Default directories — owned by non-root user
 RUN mkdir -p /data /worktrees /prompts /migrations \
@@ -57,5 +57,5 @@ EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8787/health || exit 1
 
-ENTRYPOINT ["scheduled-dev-agent"]
+ENTRYPOINT ["claude-ops"]
 CMD ["-config", "/config/config.yaml"]

@@ -46,7 +46,7 @@ jobs:
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
           labels: |
-            org.opencontainers.image.title=scheduled-dev-agent
+            org.opencontainers.image.title=claude-ops
             org.opencontainers.image.description=Scheduled autonomous dev agent powered by Claude Code
             org.opencontainers.image.vendor=nogamsung
           annotations: |
