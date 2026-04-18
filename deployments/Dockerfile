@@ -1,5 +1,5 @@
 # --- Build stage ---
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Build-time metadata (injected via --build-arg from CI)
 ARG VERSION=dev
