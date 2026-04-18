@@ -1,0 +1,29 @@
+# Worktrees
+.worktrees/
+
+# Database
+data/
+
+# Swagger docs
+docs/swagger/
+
+# Binary
+bin/
+/scheduled-dev-agent
+
+# Environment
+.env
+
+# OS
+.DS_Store
+*.swp
+*.swo
+
+# Go
+*.test
+*.out
+coverage.out
+
+# IDE
+.idea/
+.vscode/
