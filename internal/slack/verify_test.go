@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/slack"
+	"github.com/gs97ahn/claude-ops/internal/slack"
 )
 
 const testSecret = "test_signing_secret_1234"

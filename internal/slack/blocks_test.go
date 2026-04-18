@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/slack"
+	"github.com/gs97ahn/claude-ops/internal/slack"
 )
 
 func TestBuildStarted_ContainsStopButton(t *testing.T) {

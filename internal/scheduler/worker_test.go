@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/scheduler"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/scheduler"
 )
 
 // fakeSlack implements scheduler.SlackNotifier for tests.

@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
-    image: scheduled-dev-agent:latest
+    image: claude-ops:latest
     restart: on-failure
     ports:
       # Bind to localhost only — expose via reverse proxy for Slack webhook

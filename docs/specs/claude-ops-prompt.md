@@ -1,7 +1,7 @@
-# scheduled-dev-agent — Go 단일 스택 구현 프롬프트
+# Claude Ops — Go 단일 스택 구현 프롬프트
 
 > 이 파일은 `/planner` 가 생성한 **단일 스택(Go) 구현 지시서** 입니다.
-> 대응 PRD: [`./scheduled-dev-agent.md`](./scheduled-dev-agent.md)
+> 대응 PRD: [`./claude-ops.md`](./claude-ops.md)
 > 스택: **Go (Gin + GORM + sqlc + golangci-lint + swaggo)**
 > 실행 환경: 홈서버 / VPS · systemd 또는 Docker · Claude Code CLI local login 세션 필수
 
@@ -9,7 +9,7 @@
 
 ## 맥락 (꼭 읽을 것)
 
-- **PRD 본문**: `docs/specs/scheduled-dev-agent.md`
+- **PRD 본문**: `docs/specs/claude-ops.md`
 - **스택 규칙 (최우선)**: 프로젝트 루트의 `CLAUDE.md` (Go Gin 기반) — 아키텍처, MUST / NEVER, Swagger 주석, sqlc 사용, golangci-lint 게이트, 커버리지 80%
 - **관련 패턴 스킬**: `.claude/skills/go-patterns.md` (있으면)
 - **외부 도구**: `claude` CLI (필수, non-interactive `-p` 모드 + `--output-format stream-json`), `gh` CLI, `git` (>= 2.17)
@@ -41,7 +41,7 @@
 > 모든 경로는 프로젝트 루트 기준. Go CLAUDE.md 의 표준 배치를 따릅니다.
 
 ### 0. 루트 / 설정
-- [ ] `go.mod` (`go 1.22+`, module name: `github.com/gs97ahn/scheduled-dev-agent` 권장 — 팀 규칙에 맞춰 조정)
+- [ ] `go.mod` (`go 1.22+`, module name: `github.com/gs97ahn/claude-ops` 권장 — 팀 규칙에 맞춰 조정)
 - [ ] `.golangci.yml` (CLAUDE.md 예시 기반)
 - [ ] `sqlc.yaml` (engine: `sqlite`, queries: `db/query/`, schema: `migrations/`, out: `db/sqlc`)
 - [ ] `.gitignore` (`.worktrees/`, `data/`, `docs/swagger/`, `bin/`, `.env`)
@@ -51,8 +51,8 @@
 - [ ] `README.md` — 설치·세션 준비·실행·배포 섹션 (PRD 링크 포함)
 
 ### 1. Entrypoint
-- [ ] `cmd/scheduled-dev-agent/main.go`
-  - swag 전역 주석 (`@title scheduled-dev-agent API`, `@BasePath /api/v1`, `@securityDefinitions.apikey`)
+- [ ] `cmd/claude-ops/main.go`
+  - swag 전역 주석 (`@title claude-ops API`, `@BasePath /api/v1`, `@securityDefinitions.apikey`)
   - DI 조립만 담당 (config → store → github client → slack client → claude runner → scheduler → api server)
   - graceful shutdown: SIGINT/SIGTERM → scheduler stop → in-flight task SIGTERM → HTTP drain → DB close
   - `init()` 에서 `claude` · `gh` · `git` PATH 존재 확인, 없으면 fail fast
@@ -199,13 +199,13 @@ Slack Block Kit 시작 메시지 예시는 PRD §8 참조. 종료 메시지는 `
 - [ ] mock: `mockery` 설정 파일 (`.mockery.yaml`), `mocks/` 에 자동 생성
 - [ ] 커버리지: 전체 80% 이상, `scheduler`·`claude`·`slack` 패키지는 **85% 이상**
 - [ ] golangci-lint: `make lint` 통과
-- [ ] swag: Handler 주석 변경 시 `swag init -g cmd/scheduled-dev-agent/main.go -o docs`
+- [ ] swag: Handler 주석 변경 시 `swag init -g cmd/claude-ops/main.go -o docs`
 
 ### 14. 배포
-- [ ] `deployments/scheduled-dev-agent.service` (systemd unit)
-  - `User=<운영자>` (Claude 세션 소유자), `WorkingDirectory=/srv/scheduled-dev-agent`
-  - `EnvironmentFile=/etc/scheduled-dev-agent/.env`
-  - `ExecStart=/usr/local/bin/scheduled-dev-agent -config /etc/scheduled-dev-agent/config.yaml`
+- [ ] `deployments/claude-ops.service` (systemd unit)
+  - `User=<운영자>` (Claude 세션 소유자), `WorkingDirectory=/srv/claude-ops`
+  - `EnvironmentFile=/etc/claude-ops/.env`
+  - `ExecStart=/usr/local/bin/claude-ops -config /etc/claude-ops/config.yaml`
   - `Restart=on-failure`, `RestartSec=5s`
   - `KillMode=mixed` (자식 `claude` 프로세스 그룹도 종료되도록)
 - [ ] `deployments/Dockerfile` — multi-stage (build + alpine runtime), `claude`·`gh`·`git` 설치 지시 or docs 로 host-mount 방식 명시
@@ -233,7 +233,7 @@ Slack Block Kit 시작 메시지 예시는 PRD §8 참조. 종료 메시지는 `
 9. **Slack** verify (먼저 보안 테스트) → blocks → client → interactions
 10. **UseCase** (task, mode) + 단위 테스트
 11. **HTTP API** (Gin handler 전부) + swag 주석 + 통합 테스트
-12. **Entrypoint** `cmd/scheduled-dev-agent/main.go` — DI wiring, graceful shutdown
+12. **Entrypoint** `cmd/claude-ops/main.go` — DI wiring, graceful shutdown
 13. **Deployments** — systemd unit, Dockerfile, docker-compose, README
 14. **E2E**: `testutil/e2e` 에 window 밖 실행 금지 / Stop 버튼 / full-mode 토글 시나리오
 
@@ -260,7 +260,7 @@ Slack Block Kit 시작 메시지 예시는 PRD §8 참조. 종료 메시지는 `
 2. `memory/MEMORY.md` 존재 시 과거 결정·교훈 스캔
 3. 위 체크리스트를 **순서대로** 생성 (Migrations → Domain → … → API → 배포)
 4. 각 섹션 끝날 때마다 `golangci-lint run ./...` + 관련 테스트 통과 확인
-5. Handler 가 생길 때마다 swag 주석 추가, 마지막에 `swag init -g cmd/scheduled-dev-agent/main.go -o docs` 실행
+5. Handler 가 생길 때마다 swag 주석 추가, 마지막에 `swag init -g cmd/claude-ops/main.go -o docs` 실행
 6. 완료 후 다음 리포트 반환:
    - 생성된 파일 목록 (경로)
    - 신규 외부 의존성 (go.mod diff 요약)

@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 // gormAppState is the GORM model for the app_states table.

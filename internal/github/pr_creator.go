@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 // GhRunner abstracts the gh CLI invocation for testing.
@@ -80,7 +80,7 @@ func (c *PRCreator) CreatePR(ctx context.Context, task *domain.Task) (string, in
 
 	// gh pr create
 	prTitle := fmt.Sprintf("fix: issue #%d — %s", task.IssueNumber, task.IssueTitle)
-	prBody := fmt.Sprintf("Closes #%d\n\nAutomatically resolved by scheduled-dev-agent.", task.IssueNumber)
+	prBody := fmt.Sprintf("Closes #%d\n\nAutomatically resolved by Claude Ops.", task.IssueNumber)
 
 	ghArgs := []string{
 		"pr", "create",

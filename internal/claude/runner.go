@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/claude/stream"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/claude/stream"
+	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
 // WindowGate is a minimal interface so the runner can re-check the active window.

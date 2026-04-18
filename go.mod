@@ -1,4 +1,4 @@
-module github.com/gs97ahn/scheduled-dev-agent
+module github.com/gs97ahn/claude-ops
 
 go 1.25.0
 

@@ -1,5 +1,5 @@
-BINARY_NAME    := scheduled-dev-agent
-CMD_DIR        := cmd/scheduled-dev-agent
+BINARY_NAME    := claude-ops
+CMD_DIR        := cmd/claude-ops
 BIN_DIR        := bin
 COVERAGE_FILE  := coverage.out
 MIGRATIONS_DIR := migrations

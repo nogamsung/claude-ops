@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
 // TaskHandler handles task-related HTTP requests.

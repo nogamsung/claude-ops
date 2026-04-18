@@ -77,7 +77,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/gs97ahn/scheduled-dev-agent
+        - github.com/gs97ahn/claude-ops
 
 issues:
   max-issues-per-linter: 0

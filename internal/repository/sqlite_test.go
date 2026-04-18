@@ -14,8 +14,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/repository"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/repository"
 )
 
 func setupDB(t *testing.T) (*repository.SQLiteTaskRepository, *repository.SQLiteTaskEventRepository, *repository.SQLiteAppStateRepository) {

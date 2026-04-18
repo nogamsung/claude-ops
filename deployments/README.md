@@ -1,4 +1,4 @@
-# Deployment Guide — scheduled-dev-agent
+# Deployment Guide — Claude Ops
 
 ## Prerequisites
 
@@ -13,33 +13,33 @@ All deployments require the following on the host machine:
 ```bash
 # 1. Build binary
 make build
-sudo cp bin/scheduled-dev-agent /usr/local/bin/
+sudo cp bin/claude-ops /usr/local/bin/
 
 # 2. Create config directory
-sudo mkdir -p /etc/scheduled-dev-agent /srv/scheduled-dev-agent/data /srv/scheduled-dev-agent/.worktrees
+sudo mkdir -p /etc/claude-ops /srv/claude-ops/data /srv/claude-ops/.worktrees
 
 # 3. Copy and edit config
-sudo cp config.example.yaml /etc/scheduled-dev-agent/config.yaml
-sudo vim /etc/scheduled-dev-agent/config.yaml
+sudo cp config.example.yaml /etc/claude-ops/config.yaml
+sudo vim /etc/claude-ops/config.yaml
 
 # 4. Create .env with secrets (chmod 600)
-sudo bash -c 'cat > /etc/scheduled-dev-agent/.env' <<EOF
+sudo bash -c 'cat > /etc/claude-ops/.env' <<EOF
 GITHUB_TOKEN=ghp_your_token_here
 SLACK_BOT_TOKEN=xoxb_your_token_here
 SLACK_SIGNING_SECRET=your_secret_here
 EOF
-sudo chmod 600 /etc/scheduled-dev-agent/.env
+sudo chmod 600 /etc/claude-ops/.env
 
 # 5. Edit and install systemd unit
-sudo cp deployments/scheduled-dev-agent.service /etc/systemd/system/
+sudo cp deployments/claude-ops.service /etc/systemd/system/
 # Edit User= and Group= in the unit file to match the operator user
-sudo vim /etc/systemd/system/scheduled-dev-agent.service
+sudo vim /etc/systemd/system/claude-ops.service
 
 # 6. Enable and start
 sudo systemctl daemon-reload
-sudo systemctl enable scheduled-dev-agent
-sudo systemctl start scheduled-dev-agent
-sudo systemctl status scheduled-dev-agent
+sudo systemctl enable claude-ops
+sudo systemctl start claude-ops
+sudo systemctl status claude-ops
 ```
 
 ## Docker Deployment

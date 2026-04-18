@@ -1,4 +1,4 @@
-# PRD — scheduled-dev-agent
+# PRD — Claude Ops
 
 | 항목 | 값 |
 |------|-----|
@@ -14,7 +14,7 @@
 
 개발자는 Claude Code 의 플랜 사용량(plan usage / token quota) 을 최대한 낭비 없이 소진하고 싶다. 현재는 사람이 직접 터미널 앞에 앉아 `claude` CLI 를 켜야만 작업이 진행되므로, 퇴근 후·수면 시간 등 "사용자가 활성화되지 않은 시간" 의 usage 가 전혀 활용되지 못한다. 반대로 밤새 무제한으로 돌려버리면 다음 날 플랜이 소진되어 정작 필요한 시간에 사용할 수 없다.
 
-이 기능은 **홈서버/VPS 에 상주하는 Go 단일 바이너리 (scheduled-dev-agent)** 가 사용자가 미리 지정한 **활성 시간대(active window)** 에만 GitHub 이슈를 픽업 → Claude Code CLI (local login 세션) 로 개발/보안/성능 작업을 수행 → PR 을 자동 생성하고, 모든 이벤트를 **Slack** 으로 통지한다. 또한 "full usage 모드" 를 수동 토글하면 활성 시간대 게이트를 우회하여 플랜 한도 직전까지 연속 작업을 돌린다.
+이 기능은 **홈서버/VPS 에 상주하는 Go 단일 바이너리 (claude-ops)** 가 사용자가 미리 지정한 **활성 시간대(active window)** 에만 GitHub 이슈를 픽업 → Claude Code CLI (local login 세션) 로 개발/보안/성능 작업을 수행 → PR 을 자동 생성하고, 모든 이벤트를 **Slack** 으로 통지한다. 또한 "full usage 모드" 를 수동 토글하면 활성 시간대 게이트를 우회하여 플랜 한도 직전까지 연속 작업을 돌린다.
 
 핵심 제약: **Anthropic API key 를 쓰지 않는다.** 반드시 머신에 이미 `claude login` 된 Claude Code CLI 세션을 `os/exec` 로 호출한다.
 
@@ -60,7 +60,7 @@
 | US-7 | 운영자로서 **Slack 에서 작업 시작·종료** 를 확인하고 PR 을 한 번에 열고 싶다 | 1) 시작 시: `:rocket: Task started — {owner}/{repo}#{issue}` + 이슈 링크 버튼 + Stop 버튼 <br> 2) 완료 시: `:white_check_mark: Done — PR #{n}` + `View PR` 버튼 + 변경 파일 수 + diff 라인 요약 <br> 3) 메시지 delivery latency p95 < 10s |
 | US-8 | 운영자로서 **Slack Stop 버튼** 또는 CLI/HTTP 로 실행 중 task 를 즉시 중단시키고 싶다 | 1) Slack button click → HTTP webhook → 해당 task 의 `claude` pgid 에 SIGTERM <br> 2) 5초 내 미종료 시 SIGKILL <br> 3) worktree `git worktree remove --force` 로 롤백, PR 생성 안 함 <br> 4) Slack 에 `:no_entry: Cancelled` 메시지 <br> 5) Slack signing secret 검증 통과 못하면 요청 거부 |
 | US-9 | 운영자로서 모든 작업 이력을 **조회** 하여 사후 검증하고 싶다 | 1) `GET /tasks?status=...&limit=...` → queued/running/done/failed/cancelled 필터 <br> 2) `GET /tasks/{id}` → 이슈 정보, 시작/종료 시각, 추정 usage, PR URL, stdout 로그 경로 <br> 3) `GET /healthz` 200 OK + scheduler tick 시각 + full-mode 상태 |
-| US-10 | 운영자로서 서비스를 **systemd 또는 Docker** 로 운영하고 싶다 | 1) `deployments/scheduled-dev-agent.service` 파일 제공 (WorkingDirectory, Restart=on-failure) <br> 2) `deployments/Dockerfile` + `docker-compose.yml` 제공 (volumes: config, db, claude session, git worktrees) <br> 3) 두 배포 모두 `claude` CLI 세션 디렉토리 (`~/.claude`) 와 `gh` 인증 공유 문서화 |
+| US-10 | 운영자로서 서비스를 **systemd 또는 Docker** 로 운영하고 싶다 | 1) `deployments/claude-ops.service` 파일 제공 (WorkingDirectory, Restart=on-failure) <br> 2) `deployments/Dockerfile` + `docker-compose.yml` 제공 (volumes: config, db, claude session, git worktrees) <br> 3) 두 배포 모두 `claude` CLI 세션 디렉토리 (`~/.claude`) 와 `gh` 인증 공유 문서화 |
 
 ## 6. 핵심 플로우 (Key Flows)
 
@@ -222,16 +222,16 @@ Slack Block Kit 메시지 스키마 예시:
 - [ ] **OI-4**: Full usage 모드 종료 후 복귀 정책 — rate limit 감지 후 얼마 뒤(예: `resetsAt` + jitter) 다시 full 시도할지, 아니면 다음 active window 까지 무조건 대기할지. (v1 초안: `resetsAt + 60s` 후 재시도, max 3회)
 - [ ] **OI-5**: GitHub webhook 경로 지원 여부 — polling 만으로 충분한가, 아니면 webhook + polling fallback 이 필요한가. (홈서버 외부 노출 리스크 vs 지연)
 - [ ] **OI-6**: Claude CLI 세션 만료 감지 — v1 초안: `system.init.apiKeySource == "none"` 이어야 정상. 만약 `--print` 실행 시 auth prompt 가 stderr 로 나오면 task fail + Slack 긴급 알림. 자동 재로그인 불가 (사람이 SSH 접속해서 `claude login` 필요).
-- [x] **OI-7** (해소 — v1 템플릿 확정): 작업 프롬프트 템플릿 3종 — `prompts/feature.tmpl`, `prompts/security.tmpl`, `prompts/performance.tmpl`. 공통 변수: `{{.Repo}} {{.Issue.Number}} {{.Issue.Title}} {{.Issue.Body}} {{.Issue.Labels}} {{.Branch}} {{.BaseBranch}}`. 공통 지시: ① 작업 브랜치는 이미 체크아웃됨 ② 변경 후 `gh pr create` 는 호출 금지 (서비스가 담당) ③ 커밋만 수행, push 도 서비스가 담당 ④ 외부 네트워크 호출 금지 ⑤ 테스트가 있으면 실행 ⑥ 마지막 assistant 메시지에 `CHANGES:` 섹션으로 변경 요약 출력. 상세 초안은 `./scheduled-dev-agent-prompt.md` §13 참조.
+- [x] **OI-7** (해소 — v1 템플릿 확정): 작업 프롬프트 템플릿 3종 — `prompts/feature.tmpl`, `prompts/security.tmpl`, `prompts/performance.tmpl`. 공통 변수: `{{.Repo}} {{.Issue.Number}} {{.Issue.Title}} {{.Issue.Body}} {{.Issue.Labels}} {{.Branch}} {{.BaseBranch}}`. 공통 지시: ① 작업 브랜치는 이미 체크아웃됨 ② 변경 후 `gh pr create` 는 호출 금지 (서비스가 담당) ③ 커밋만 수행, push 도 서비스가 담당 ④ 외부 네트워크 호출 금지 ⑤ 테스트가 있으면 실행 ⑥ 마지막 assistant 메시지에 `CHANGES:` 섹션으로 변경 요약 출력. 상세 초안은 `./claude-ops-prompt.md` §13 참조.
 
 ---
 
 ## 참고 — 아키텍처 레이아웃 (Go)
 
-PRD 단계에서는 개략만. 상세 파일 리스트는 `./scheduled-dev-agent-prompt.md` 참조.
+PRD 단계에서는 개략만. 상세 파일 리스트는 `./claude-ops-prompt.md` 참조.
 
 ```
-cmd/scheduled-dev-agent/main.go   # entrypoint, DI wiring, swag @title
+cmd/claude-ops/main.go   # entrypoint, DI wiring, swag @title
 internal/
   config/       # YAML + env loader, validation
   scheduler/    # active-window gate, tick loop, full-mode toggle
@@ -247,4 +247,4 @@ deployments/    # systemd unit, Dockerfile, docker-compose.yml
 prompts/        # claude 프롬프트 템플릿 (feature / security / perf)
 ```
 
-단일 스택 프로젝트이므로 역할별 분할 없이 **단일 구현 프롬프트** (`./scheduled-dev-agent-prompt.md`) 로 전달합니다.
+단일 스택 프로젝트이므로 역할별 분할 없이 **단일 구현 프롬프트** (`./claude-ops-prompt.md`) 로 전달합니다.

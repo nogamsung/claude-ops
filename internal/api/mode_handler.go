@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
 // ModeHandler handles full-mode toggle requests.

@@ -105,5 +105,5 @@ jobs:
         run: |
           CGO_ENABLED=1 go build \
             -ldflags="-s -w" \
-            -o bin/scheduled-dev-agent \
-            ./cmd/scheduled-dev-agent/
+            -o bin/claude-ops \
+            ./cmd/claude-ops/
