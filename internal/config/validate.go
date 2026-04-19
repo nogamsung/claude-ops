@@ -22,7 +22,82 @@ func (c *Config) Validate() error {
 	if c.GitHub.PollInterval <= 0 {
 		return fmt.Errorf("github.poll_interval must be positive")
 	}
+	if err := c.validateLimits(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (c *Config) validateLimits() error {
+	if c.Limits.DailyMaxTasks < 0 {
+		return fmt.Errorf("limits.daily_max_tasks must be >= 0")
+	}
+	if c.Limits.WeeklyMaxTasks < 0 {
+		return fmt.Errorf("limits.weekly_max_tasks must be >= 0")
+	}
+	if c.Limits.WeekStartsOn != "" {
+		if _, ok := weekStartMap[strings.ToLower(c.Limits.WeekStartsOn)]; !ok {
+			return fmt.Errorf("limits.week_starts_on %q must be mon|tue|wed|thu|fri|sat|sun", c.Limits.WeekStartsOn)
+		}
+	}
+	if c.Limits.ResetTZ != "" {
+		if _, err := time.LoadLocation(c.Limits.ResetTZ); err != nil {
+			return fmt.Errorf("limits.reset_tz %q: %w", c.Limits.ResetTZ, err)
+		}
+	}
+	if c.Limits.DailyMaxTasks > 0 && c.Limits.WeeklyMaxTasks > 0 &&
+		c.Limits.DailyMaxTasks > c.Limits.WeeklyMaxTasks {
+		return fmt.Errorf("limits.daily_max_tasks (%d) must be <= weekly_max_tasks (%d)",
+			c.Limits.DailyMaxTasks, c.Limits.WeeklyMaxTasks)
+	}
+	return nil
+}
+
+// weekStartMap maps lowercase day abbreviation to time.Weekday for limits config.
+var weekStartMap = map[string]time.Weekday{
+	"sun": time.Sunday,
+	"mon": time.Monday,
+	"tue": time.Tuesday,
+	"wed": time.Wednesday,
+	"thu": time.Thursday,
+	"fri": time.Friday,
+	"sat": time.Saturday,
+}
+
+// ResolvedLimits returns concrete daily/weekly caps with derived defaults applied:
+//   - both zero → unlimited (both stay 0)
+//   - only daily set → weekly = daily * 7
+//   - only weekly set → daily = ceil(weekly / 7)
+func (c *LimitsConfig) ResolvedLimits() (dailyMax, weeklyMax int, weekStart time.Weekday, tz *time.Location, err error) {
+	dailyMax = c.DailyMaxTasks
+	weeklyMax = c.WeeklyMaxTasks
+	switch {
+	case dailyMax == 0 && weeklyMax > 0:
+		dailyMax = (weeklyMax + 6) / 7
+	case weeklyMax == 0 && dailyMax > 0:
+		weeklyMax = dailyMax * 7
+	}
+
+	startName := strings.ToLower(c.WeekStartsOn)
+	if startName == "" {
+		startName = "mon"
+	}
+	wd, ok := weekStartMap[startName]
+	if !ok {
+		return 0, 0, 0, nil, fmt.Errorf("invalid week_starts_on %q", c.WeekStartsOn)
+	}
+	weekStart = wd
+
+	tzName := c.ResetTZ
+	if tzName == "" {
+		tzName = "UTC"
+	}
+	loc, err := time.LoadLocation(tzName)
+	if err != nil {
+		return 0, 0, 0, nil, fmt.Errorf("load tz %q: %w", tzName, err)
+	}
+	tz = loc
+	return dailyMax, weeklyMax, weekStart, tz, nil
 }
 
 func (c *Config) validateWindows() error {

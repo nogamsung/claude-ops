@@ -6,6 +6,17 @@ runtime:
   worktree_root: ".worktrees"
   prompts_dir: "prompts"
 
+limits:
+  # Daily 上限. 0 이면 weekly_max_tasks 에서 자동 유도 (ceil(weekly/7)).
+  # 둘 다 0 이면 무제한.
+  daily_max_tasks: 5
+  # Weekly 上限. 0 이면 daily_max_tasks * 7 로 자동 설정.
+  weekly_max_tasks: 0
+  # 주 시작 요일 — 카운터 리셋 기준 (mon|sun|...)
+  week_starts_on: "mon"
+  # 일/주 카운터 리셋 기준 타임존
+  reset_tz: "Asia/Seoul"
+
 scheduler:
   active_windows:
     - days: ["mon", "tue", "wed", "thu", "fri"]

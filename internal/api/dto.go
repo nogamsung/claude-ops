@@ -75,3 +75,38 @@ type FullModeResponse struct {
 type ErrorResponse struct {
 	Error string `json:"error" example:"not found"`
 }
+
+// LimitsResponse is the GET /modes/limits response.
+type LimitsResponse struct {
+	Daily     LimitsDaily     `json:"daily"`
+	Weekly    LimitsWeekly    `json:"weekly"`
+	RateLimit LimitsRateLimit `json:"rate_limit"`
+	Reason    string          `json:"reason,omitempty" example:"daily_cap_reached"`
+}
+
+// LimitsDaily summarises the daily-bucket budget.
+type LimitsDaily struct {
+	Count int    `json:"count" example:"3"`
+	Max   int    `json:"max" example:"5"`
+	Date  string `json:"date" example:"2026-04-19"`
+}
+
+// LimitsWeekly summarises the weekly-bucket budget.
+type LimitsWeekly struct {
+	Count int    `json:"count" example:"12"`
+	Max   int    `json:"max" example:"35"`
+	Week  string `json:"week" example:"2026-W17"`
+}
+
+// LimitsRateLimit reports the currently observed CLI rate-limit block.
+type LimitsRateLimit struct {
+	BlockedUntil  *time.Time `json:"blocked_until,omitempty"`
+	RateLimitType string     `json:"rate_limit_type,omitempty" example:"five_hour"`
+}
+
+// LimitsPatchRequest is the PATCH /modes/limits request body.
+// Either field may be omitted (or set to 0) to fall back to the config-derived value.
+type LimitsPatchRequest struct {
+	DailyMax  *int `json:"daily_max,omitempty" example:"5"`
+	WeeklyMax *int `json:"weekly_max,omitempty" example:"35"`
+}

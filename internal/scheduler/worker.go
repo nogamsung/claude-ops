@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gs97ahn/claude-ops/internal/claude"
+	"github.com/gs97ahn/claude-ops/internal/claude/stream"
 	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
@@ -30,6 +32,14 @@ type PRCreator interface {
 	CreatePR(ctx context.Context, task *domain.Task) (string, int, error)
 }
 
+// BudgetEnforcer is the worker-side hook for the daily/weekly task budget.
+// CheckAndIncrementReason atomically reserves a slot; RecordRateLimitBlock
+// persists an observed CLI rate-limit signal so subsequent ticks back off.
+type BudgetEnforcer interface {
+	CheckAndIncrementReason(ctx context.Context, now time.Time) (BudgetReason, error)
+	RecordRateLimitBlock(ctx context.Context, resetsAtUnix int64, rateLimitType string, observedAt time.Time) error
+}
+
 // WorkerConfig holds dependencies for the Worker.
 type WorkerConfig struct {
 	TaskRepo     domain.TaskRepository
@@ -39,6 +49,7 @@ type WorkerConfig struct {
 	Canceller    claude.Canceller
 	Slack        SlackNotifier
 	PRCreator    PRCreator
+	Budget       BudgetEnforcer
 	Clock        Clock
 	Windows      []*domain.ActiveWindow
 	WorktreeRoot string
@@ -121,6 +132,23 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 		return w.cancel(ctx, task)
 	}
 
+	// Budget gate (atomic check + counter increment) — last gate before claude
+	// spawn. Always enforced: even in full mode the daily/weekly cap and any
+	// observed rate-limit block apply, since they are the very limits full
+	// mode must respect to avoid plan exhaustion.
+	if w.cfg.Budget != nil {
+		reason, err := w.cfg.Budget.CheckAndIncrementReason(ctx, w.cfg.Clock.Now())
+		if err != nil {
+			_ = w.removeWorktree(task.WorktreePath)
+			return w.fail(ctx, task, fmt.Sprintf("budget gate error: %v", err))
+		}
+		if reason != BudgetReasonAllowed {
+			slog.Info("worker: budget gate blocks task", "task_id", task.ID, "reason", string(reason))
+			_ = w.removeWorktree(task.WorktreePath)
+			return w.cancel(ctx, task)
+		}
+	}
+
 	// Run Claude.
 	gate := &funcWindowGate{fn: func(t time.Time, fm bool) bool {
 		return AllowNow(t, fm, w.cfg.Windows)
@@ -143,6 +171,7 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 
 	// Handle Claude errors.
 	if runErr != nil {
+		w.maybeRecordRateLimit(ctx, task, runErr)
 		slog.Error("worker: claude run failed", "err", runErr, "task_id", task.ID)
 		stderrTail := ""
 		if result != nil {
@@ -312,6 +341,27 @@ func (w *Worker) isFullMode(ctx context.Context) bool {
 		return false
 	}
 	return len(state.ValueJSON) > 0 && containsTrue(state.ValueJSON)
+}
+
+// maybeRecordRateLimit detects an *stream.ErrRateLimited from the runner and
+// persists the block via the BudgetEnforcer. Best-effort — failures are logged
+// but do not change the surrounding error path.
+func (w *Worker) maybeRecordRateLimit(ctx context.Context, task *domain.Task, runErr error) {
+	if w.cfg.Budget == nil || runErr == nil {
+		return
+	}
+	var rl *stream.ErrRateLimited
+	if !errors.As(runErr, &rl) {
+		return
+	}
+	now := w.cfg.Clock.Now()
+	if err := w.cfg.Budget.RecordRateLimitBlock(ctx, rl.ResetsAt, rl.RateLimitType, now); err != nil {
+		slog.Warn("worker: record rate-limit block", "err", err, "task_id", task.ID)
+	}
+	w.recordEvent(ctx, task.ID, domain.EventKindUsageWarning, map[string]interface{}{
+		"resets_at_unix":  rl.ResetsAt,
+		"rate_limit_type": rl.RateLimitType,
+	})
 }
 
 // funcWindowGate adapts a function to the claude.WindowGate interface.

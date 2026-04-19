@@ -14,6 +14,7 @@ import (
 
 	"github.com/gs97ahn/claude-ops/internal/api"
 	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/scheduler"
 	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
@@ -100,13 +101,15 @@ func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.En
 	canceller := &fakeCanceller{}
 	taskUC := usecase.NewTaskUseCase(taskRepo, &fakeEventRepo{}, appStateRepo, canceller, nil)
 	modeUC := usecase.NewModeUseCase(appStateRepo)
+	budgetUC := usecase.NewBudgetUseCase(appStateRepo, scheduler.BudgetLimits{})
 
 	healthH := api.NewHealthHandler(modeUC)
 	taskH := api.NewTaskHandler(taskUC)
 	modeH := api.NewModeHandler(modeUC)
+	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler("test-secret", canceller)
 
-	return api.NewRouter(healthH, taskH, modeH, slackH)
+	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
 }
 
 func TestHealthEndpoint(t *testing.T) {

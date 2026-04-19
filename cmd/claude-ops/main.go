@@ -140,6 +140,18 @@ func run() error {
 	// Use cases.
 	modeUC := usecase.NewModeUseCase(appStateRepo)
 
+	// Resolve task-budget limits (config defaults + derived daily/weekly).
+	dailyMax, weeklyMax, weekStart, resetTZ, err := cfg.Limits.ResolvedLimits()
+	if err != nil {
+		return fmt.Errorf("resolve limits: %w", err)
+	}
+	budgetUC := usecase.NewBudgetUseCase(appStateRepo, scheduler.BudgetLimits{
+		DailyMax:     dailyMax,
+		WeeklyMax:    weeklyMax,
+		WeekStartsOn: weekStart,
+		ResetTZ:      resetTZ,
+	})
+
 	// Worker.
 	workerCfg := scheduler.WorkerConfig{
 		TaskRepo:     taskRepo,
@@ -149,6 +161,7 @@ func run() error {
 		Canceller:    claude.NewProcessCanceller(),
 		Slack:        &schedulerSlackAdapter{client: slackClient},
 		PRCreator:    &schedulerPRAdapter{inner: prCreator},
+		Budget:       budgetUC,
 		Windows:      windows,
 		WorktreeRoot: cfg.Runtime.WorktreeRoot,
 		PromptsDir:   cfg.Runtime.PromptsDir,
@@ -163,6 +176,7 @@ func run() error {
 		AppStateRepo: appStateRepo,
 		Poller:       poller,
 		Worker:       worker,
+		BudgetGate:   budgetUC,
 		TickInterval: cfg.Runtime.TickInterval,
 	})
 
@@ -178,8 +192,9 @@ func run() error {
 	healthH := api.NewHealthHandler(modeUC)
 	taskH := api.NewTaskHandler(taskUC)
 	modeH := api.NewModeHandler(modeUC)
+	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler(env.SlackSigningSecret, sched)
-	router := api.NewRouter(healthH, taskH, modeH, slackH)
+	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
 
 	srv := &http.Server{
 		Addr:    cfg.Runtime.HTTPBindAddr,

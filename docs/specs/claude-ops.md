@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 작성일 | 2026-04-18 |
+| 작성일 | 2026-04-18 (개정 2026-04-19: §2 G7, §5 US-11/US-12, §6.2/6.3, §7 AppState, §8 /modes/limits, §10 R6, §12 OI-4 추가/해소) |
 | 상태 | draft |
 | 스택 범위 | Go (단일 바이너리, 홈서버/VPS 상주) |
 | 우선순위 | P0 |
@@ -26,6 +26,7 @@
 - G4. Slack Stop 버튼 또는 HTTP API 로 실행 중 task 를 **5초 이내** SIGTERM, 30초 내 SIGKILL 보장
 - G5. Full usage 모드 토글 시 활성 시간대 무시하고 **Claude Code usage 한도 신호 감지까지** 연속 실행
 - G6. 단일 Go 바이너리 + systemd unit / Dockerfile 로 배포 (외부 DB·큐 의존성 없음 — SQLite)
+- G7. **Budget gate** (일일/주간 task 카운트 캡 + CLI rate-limit 신호 기반 자동 throttle) 가 항상 enforced — full mode 도 우회 불가. 기본값 daily=5, weekly=daily*7. 운영자가 HTTP API 로 런타임 조절 가능
 
 ## 3. 비목표 (Non-goals)
 
@@ -61,6 +62,8 @@
 | US-8 | 운영자로서 **Slack Stop 버튼** 또는 CLI/HTTP 로 실행 중 task 를 즉시 중단시키고 싶다 | 1) Slack button click → HTTP webhook → 해당 task 의 `claude` pgid 에 SIGTERM <br> 2) 5초 내 미종료 시 SIGKILL <br> 3) worktree `git worktree remove --force` 로 롤백, PR 생성 안 함 <br> 4) Slack 에 `:no_entry: Cancelled` 메시지 <br> 5) Slack signing secret 검증 통과 못하면 요청 거부 |
 | US-9 | 운영자로서 모든 작업 이력을 **조회** 하여 사후 검증하고 싶다 | 1) `GET /tasks?status=...&limit=...` → queued/running/done/failed/cancelled 필터 <br> 2) `GET /tasks/{id}` → 이슈 정보, 시작/종료 시각, 추정 usage, PR URL, stdout 로그 경로 <br> 3) `GET /healthz` 200 OK + scheduler tick 시각 + full-mode 상태 |
 | US-10 | 운영자로서 서비스를 **systemd 또는 Docker** 로 운영하고 싶다 | 1) `deployments/claude-ops.service` 파일 제공 (WorkingDirectory, Restart=on-failure) <br> 2) `deployments/Dockerfile` + `docker-compose.yml` 제공 (volumes: config, db, claude session, git worktrees) <br> 3) 두 배포 모두 `claude` CLI 세션 디렉토리 (`~/.claude`) 와 `gh` 인증 공유 문서화 |
+| US-11 | 운영자로서 **하루/한 주에 돌릴 task 수 상한** 을 두어 플랜 한도 직전까지 가지 않게 하고 싶다 | 1) `config.yaml` 의 `limits: {daily_max_tasks, weekly_max_tasks, week_starts_on, reset_tz}` 로 선언 <br> 2) 둘 중 하나만 설정하면 자동 유도 (daily=ceil(weekly/7), weekly=daily*7), 둘 다 0 이면 무제한 <br> 3) 카운터 리셋은 `reset_tz` 의 자정·`week_starts_on` 의 0시 기준 <br> 4) 일일 한도 도달 → scheduler tick 이 dispatch 스킵 + Slack 통지 (해당 task 는 cancel) <br> 5) `GET /modes/limits` 로 현재 카운터·캡·rate-limit 차단 상태 조회 / `PATCH /modes/limits {daily_max?, weekly_max?}` 로 런타임 오버라이드 (0 → config 값으로 폴백) <br> 6) Full mode 도 우회 못 함 — 한도는 항상 enforced |
+| US-12 | 운영자로서 Claude CLI 가 **rate limit 에 부딪히면 자동으로 멈추고 reset 시각까지 기다리길** 원한다 | 1) `rate_limit_event` 스트림 신호 (`status != "allowed"`) 를 worker 가 감지 → `resetsAt` + `rateLimitType` 을 AppState 에 영속 <br> 2) `now < blocked_until` 인 동안 모든 dispatch 가 budget gate 에서 차단 (Full mode 포함) <br> 3) `usage_warning` task event 기록 + Slack 통지 <br> 4) `now >= blocked_until` 이 되면 다음 tick 부터 자동 재개 — 재시작 불필요 <br> 5) 첫 wall hit 1건은 fail 처리됨 (사전 예측 불가, PRD §10 R6 참조) |
 
 ## 6. 핵심 플로우 (Key Flows)
 
@@ -87,12 +90,13 @@
 ### 6.2 예외 경로
 
 - **윈도우 밖 요청**: scheduler 가 큐에서 pull 하지 않음. 수동 `POST /tasks` 는 409.
-- **Claude usage 한도 감지**: stream-json 에서 rate_limit 시그널 검출 → 진행 중 task 는 graceful stop (chunk 저장) → full mode 자동 해제 → Slack 경고.
+- **Daily/weekly cap 도달**: scheduler tick 이 budget gate 에서 dispatch 스킵 (poll 은 계속). worker 진입한 task 는 claude spawn 직전 카운트 캡 재확인되어 cancel.
+- **Claude usage 한도 감지**: `rate_limit_event` (`status != "allowed"`) → `ErrRateLimited` 로 worker 가 진행 중 task fail 처리 + AppState 에 `rate_limit_block{blocked_until, rate_limit_type}` 영속 → 이후 tick 은 모두 budget gate 에서 차단 → Slack 경고. `now >= blocked_until` 이면 자동 재개. Full mode 자동 해제는 v1 에서 보류 (블록이 더 강한 게이트라 동등한 효과).
 - **PR 생성 실패** (gh 인증 만료·네트워크): Task status=failed, worktree 보존(재시도용), Slack `:x:` 알림 + 로그 snippet.
 - **git push 충돌**: rebase 시도 1회 → 실패 시 fail.
 - **Claude CLI crash**: exit code != 0 → task failed, stderr tail 150줄 Slack 첨부.
 - **Slack webhook 서명 불일치**: 401 반환, 요청 무시.
-- **서비스 재시작**: running 상태 task 는 복구하지 않음 (orphan 표시 + Slack 통지) — Claude CLI 자식 프로세스도 systemd 가 정리.
+- **서비스 재시작**: running 상태 task 는 복구하지 않음 (orphan 표시 + Slack 통지) — Claude CLI 자식 프로세스도 systemd 가 정리. AppState 의 카운터·rate_limit_block 은 보존되어 재시작 후에도 한도 추적 연속성 유지.
 
 ### 6.3 Full usage 모드 플로우
 
@@ -100,9 +104,10 @@
 1. POST /modes/full {enabled: true}
 2. mode 상태 SQLite 에 persist
 3. scheduler 가 active window 게이트 bypass
+   ⚠ budget gate (daily/weekly cap + rate_limit_block) 는 그대로 enforced
 4. 이슈 소진 후에도 idle poll 지속 (30s → 10s 간격 축소)
-5. Claude stdout 에서 rate_limit 또는 usage_warning 감지
-6. 현재 task graceful stop → full mode off → Slack 통지 → 다음 active window 까지 대기
+5. Claude stdout 에서 rate_limit_event 감지 → AppState rate_limit_block 영속
+6. 현재 task fail → 다음 tick 부터 budget gate 가 모든 dispatch 차단 → resetsAt 도달 시 자동 재개
 ```
 
 ## 7. 데이터 모델 (요약)
@@ -121,8 +126,13 @@ TaskEvent (id, task_id FK, kind, payload_json, created_at)
     kind ∈ {started, slack_sent, claude_stdout_chunk, cancelled, usage_warning, pr_created, failed}
 
 AppState (key PK, value_json, updated_at)
-    e.g. key="full_mode", value={enabled: true, enabled_at: ...}
-         key="last_poll_at", value={...}
+    e.g. key="full_mode",         value={enabled: true, enabled_at: ...}
+         key="last_poll_at",      value={...}
+         key="task_counters",     value={daily_count, daily_key:"2026-04-19",
+                                          weekly_count, weekly_key:"2026-W17"}
+         key="rate_limit_block",  value={blocked_until_unix, rate_limit_type:"five_hour",
+                                          observed_at_unix}
+         key="limits_override",   value={daily_max, weekly_max}  # 0 → config 폴백
 ```
 
 관계: `Task 1 ── N TaskEvent`. `AppState` 는 key-value 싱글톤.
@@ -139,6 +149,8 @@ POST   /tasks                      수동 트리거 (repo, issue_number) — win
 POST   /tasks/{id}/stop            강제 중단
 GET    /modes/full                 현재 모드 조회
 POST   /modes/full                 {enabled: bool} 토글
+GET    /modes/limits               현재 일/주 카운터·캡·rate-limit 차단 상태 조회
+PATCH  /modes/limits               {daily_max?, weekly_max?} 런타임 오버라이드 (0=config 폴백)
 POST   /slack/interactions         Slack Block Kit interactive endpoint (signing secret 검증)
 POST   /github/webhook             (선택) issue 이벤트 수신 — polling 보완
 ```
@@ -189,6 +201,7 @@ Slack Block Kit 메시지 스키마 예시:
 - **R3 (Med)**: 동시 worktree 여러 개 존재 시 같은 브랜치 충돌 → v1 은 직렬 실행 1개로 제한, 세마포어 강제
 - **R4 (Low)**: Slack Stop 서명 검증 누락 → 외부 공격자가 임의 kill → signing secret 검증 + timestamp replay 방어 (5분)
 - **R5 (Low)**: SQLite write 동시성 → WAL 모드 + 단일 writer 보장
+- **R6 (Med)**: rate_limit_event 는 "예측" 이 아닌 "반응" — 첫 wall hit 1건은 fail 불가피 (CLI 가 잔여 quota 를 미노출). 완화: daily/weekly task 카운트 캡 (US-11) 으로 wall 도달 전에 자체 throttle. 카운트 캡 보수적으로 잡으면 wall hit 빈도 최소화 가능.
 
 ## 11. 범위 외 (Out of Scope)
 
@@ -219,7 +232,7 @@ Slack Block Kit 메시지 스키마 예시:
 
 - [ ] **OI-2**: 동시 task 병렬 실행 지원 여부. v1 은 직렬 1개 고정이지만 Max 플랜 multi-session 이 허용되면 v1.1 에서 2~3 병렬 검토. 충돌 시나리오 (같은 레포 동시 worktree) 완화 방안 결정 필요.
 - [ ] **OI-3**: PR reviewer 자동 할당 규칙 — 레포 config 의 `reviewers` 배열을 그대로 사용할지, GitHub CODEOWNERS 를 참조할지, 이슈 assignee 를 상속할지.
-- [ ] **OI-4**: Full usage 모드 종료 후 복귀 정책 — rate limit 감지 후 얼마 뒤(예: `resetsAt` + jitter) 다시 full 시도할지, 아니면 다음 active window 까지 무조건 대기할지. (v1 초안: `resetsAt + 60s` 후 재시도, max 3회)
+- [x] **OI-4** (해소 — 2026-04-19, US-11/US-12 와 함께 구현): 별도의 "full mode 자동 해제 + 재시도" 로직 대신 **AppState 의 `rate_limit_block.blocked_until` 단일 게이트** 로 통일. Full mode 는 켜둔 채로 두되 budget gate 가 모든 dispatch 를 차단 → `now >= blocked_until` 이 되면 다음 tick 부터 자연스럽게 재개. jitter 나 max 재시도 카운트는 v1 에서 불필요 (블록이 단일 진실 공급원).
 - [ ] **OI-5**: GitHub webhook 경로 지원 여부 — polling 만으로 충분한가, 아니면 webhook + polling fallback 이 필요한가. (홈서버 외부 노출 리스크 vs 지연)
 - [ ] **OI-6**: Claude CLI 세션 만료 감지 — v1 초안: `system.init.apiKeySource == "none"` 이어야 정상. 만약 `--print` 실행 시 auth prompt 가 stderr 로 나오면 task fail + Slack 긴급 알림. 자동 재로그인 불가 (사람이 SSH 접속해서 `claude login` 필요).
 - [x] **OI-7** (해소 — v1 템플릿 확정): 작업 프롬프트 템플릿 3종 — `prompts/feature.tmpl`, `prompts/security.tmpl`, `prompts/performance.tmpl`. 공통 변수: `{{.Repo}} {{.Issue.Number}} {{.Issue.Title}} {{.Issue.Body}} {{.Issue.Labels}} {{.Branch}} {{.BaseBranch}}`. 공통 지시: ① 작업 브랜치는 이미 체크아웃됨 ② 변경 후 `gh pr create` 는 호출 금지 (서비스가 담당) ③ 커밋만 수행, push 도 서비스가 담당 ④ 외부 네트워크 호출 금지 ⑤ 테스트가 있으면 실행 ⑥ 마지막 assistant 메시지에 `CHANGES:` 섹션으로 변경 요약 출력. 상세 초안은 `./claude-ops-prompt.md` §13 참조.
