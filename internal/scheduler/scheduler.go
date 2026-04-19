@@ -24,6 +24,12 @@ type WorkerRunner interface {
 	RunTask(ctx context.Context, task *domain.Task) error
 }
 
+// BudgetGate reports whether a new task may be dispatched at now and why not
+// when refused. The empty BudgetReason means allowed.
+type BudgetGate interface {
+	SnapshotReason(ctx context.Context, now time.Time) (BudgetReason, error)
+}
+
 // Scheduler drives the tick loop and dispatches tasks within active windows.
 type Scheduler struct {
 	clock        Clock
@@ -32,6 +38,7 @@ type Scheduler struct {
 	appStateRepo domain.AppStateRepository
 	poller       Poller
 	worker       WorkerRunner
+	budgetGate   BudgetGate
 
 	tickInterval time.Duration
 
@@ -54,6 +61,7 @@ type Config struct {
 	AppStateRepo domain.AppStateRepository
 	Poller       Poller
 	Worker       WorkerRunner
+	BudgetGate   BudgetGate
 	TickInterval time.Duration
 }
 
@@ -72,6 +80,7 @@ func New(cfg Config) *Scheduler {
 		appStateRepo: cfg.AppStateRepo,
 		poller:       cfg.Poller,
 		worker:       cfg.Worker,
+		budgetGate:   cfg.BudgetGate,
 		tickInterval: cfg.TickInterval,
 		sem:          make(chan struct{}, 1),
 		cancelMap:    make(map[string]context.CancelFunc),
@@ -128,10 +137,23 @@ func (s *Scheduler) tick(ctx context.Context) {
 		return
 	}
 
-	// Poll for new issues.
+	// Poll for new issues regardless of budget — polling is free and lets
+	// queued items accumulate for when the gate reopens.
 	if s.poller != nil {
 		if err := s.poller.Poll(ctx); err != nil {
 			slog.Error("scheduler: poller error", "err", err)
+		}
+	}
+
+	// Budget gate (daily/weekly task cap + observed CLI rate-limit block).
+	// Always enforced — even in full mode we refuse to spawn past these caps.
+	if s.budgetGate != nil {
+		reason, err := s.budgetGate.SnapshotReason(ctx, s.clock.Now())
+		if err != nil {
+			slog.Warn("scheduler: budget snapshot error", "err", err)
+		} else if reason != BudgetReasonAllowed {
+			slog.Debug("scheduler: budget gate blocks dispatch", "reason", string(reason))
+			return
 		}
 	}
 

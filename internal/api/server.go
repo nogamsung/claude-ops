@@ -12,6 +12,7 @@ func NewRouter(
 	healthHandler *HealthHandler,
 	taskHandler *TaskHandler,
 	modeHandler *ModeHandler,
+	limitsHandler *LimitsHandler,
 	slackHandler *SlackHandler,
 ) *gin.Engine {
 	r := gin.New()
@@ -34,6 +35,10 @@ func NewRouter(
 	// Full mode
 	r.GET("/modes/full", modeHandler.GetFullMode)
 	r.POST("/modes/full", modeHandler.SetFullMode)
+
+	// Task budget limits
+	r.GET("/modes/limits", limitsHandler.GetLimits)
+	r.PATCH("/modes/limits", limitsHandler.PatchLimits)
 
 	// Slack
 	r.POST("/slack/interactions", slackHandler.HandleInteractions)

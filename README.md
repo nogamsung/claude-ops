@@ -50,10 +50,18 @@ curl http://127.0.0.1:8787/healthz
 # 작업 목록 조회
 curl http://127.0.0.1:8787/tasks?status=queued
 
-# Full usage 모드 활성화 (시간대 게이트 우회)
+# Full usage 모드 활성화 (시간대 게이트 우회 — budget gate 는 그대로 enforced)
 curl -X POST http://127.0.0.1:8787/modes/full \
   -H 'Content-Type: application/json' \
   -d '{"enabled": true}'
+
+# 일일/주간 task 한도 조회 (현재 카운트 + rate-limit 차단 상태 포함)
+curl http://127.0.0.1:8787/modes/limits
+
+# 한도 런타임 오버라이드 (0 → config.yaml 기본값으로 폴백)
+curl -X PATCH http://127.0.0.1:8787/modes/limits \
+  -H 'Content-Type: application/json' \
+  -d '{"daily_max": 10, "weekly_max": 50}'
 
 # 수동 작업 트리거
 curl -X POST http://127.0.0.1:8787/tasks \

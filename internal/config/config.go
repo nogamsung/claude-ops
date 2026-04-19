@@ -14,8 +14,19 @@ import (
 type Config struct {
 	Runtime   RuntimeConfig   `mapstructure:"runtime"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
+	Limits    LimitsConfig    `mapstructure:"limits"`
 	GitHub    GitHubConfig    `mapstructure:"github"`
 	Slack     SlackConfig     `mapstructure:"slack"`
+}
+
+// LimitsConfig caps how many tasks may run per day/week and how the buckets reset.
+// Either DailyMaxTasks or WeeklyMaxTasks may be 0; defaults derive the missing
+// one from the other (daily = ceil(weekly/7); weekly = daily*7).
+type LimitsConfig struct {
+	DailyMaxTasks  int    `mapstructure:"daily_max_tasks"`
+	WeeklyMaxTasks int    `mapstructure:"weekly_max_tasks"`
+	WeekStartsOn   string `mapstructure:"week_starts_on"` // mon|sun
+	ResetTZ        string `mapstructure:"reset_tz"`       // IANA tz, e.g. "Asia/Seoul"
 }
 
 // RuntimeConfig holds server and storage settings.
@@ -93,6 +104,10 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("runtime.worktree_root", ".worktrees")
 	v.SetDefault("runtime.prompts_dir", "prompts")
 	v.SetDefault("github.poll_interval", "60s")
+	v.SetDefault("limits.daily_max_tasks", 5)
+	v.SetDefault("limits.weekly_max_tasks", 0) // 0 → derived = daily * 7
+	v.SetDefault("limits.week_starts_on", "mon")
+	v.SetDefault("limits.reset_tz", "Asia/Seoul")
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config %q: %w", path, err)
