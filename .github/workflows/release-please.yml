@@ -11,14 +11,151 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  packages: write
+  id-token: write  # cosign keyless signing via OIDC
 
 jobs:
   release-please:
     name: Create / update release PR
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Build & Push Release Image
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      # ── Metadata ────────────────────────────────────────────────────────────
+      # GITHUB_TOKEN-created tags don't fire workflow triggers, so we emit the
+      # full semver tag set inline here instead of relying on docker/metadata
+      # semver parsing.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+          MAJOR: ${{ needs.release-please.outputs.major }}
+          MINOR: ${{ needs.release-please.outputs.minor }}
+          IS_PRERELEASE: ${{ contains(needs.release-please.outputs.tag_name, '-') }}
+        with:
+          images: ghcr.io/nogamsung/claude-ops
+          tags: |
+            type=raw,value=${{ env.TAG }}
+            type=raw,value=${{ env.VERSION }}
+            type=raw,value=${{ env.MAJOR }}.${{ env.MINOR }}
+            type=raw,value=${{ env.MAJOR }},enable=${{ env.MAJOR != '0' && env.IS_PRERELEASE == 'false' }}
+            type=raw,value=latest,enable=${{ env.IS_PRERELEASE == 'false' }}
+          labels: |
+            org.opencontainers.image.title=claude-ops
+            org.opencontainers.image.description=Scheduled autonomous dev agent powered by Claude Code
+            org.opencontainers.image.vendor=nogamsung
+            org.opencontainers.image.version=${{ env.VERSION }}
+
+      # ── Build infrastructure ─────────────────────────────────────────────
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute build date
+        id: build_date
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      # ── Build & Push ──────────────────────────────────────────────────────
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.release-please.outputs.tag_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_date.outputs.value }}
+          provenance: true
+          sbom: true
+
+      # ── Cosign keyless signing (sigstore) ────────────────────────────────
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign (keyless via OIDC)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes \
+            ghcr.io/nogamsung/claude-ops@${DIGEST}
+
+      # ── SBOM upload ────────────────────────────────────────────────────────
+      - name: Generate and upload SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/nogamsung/claude-ops@${{ steps.build.outputs.digest }}
+          artifact-name: sbom-${{ needs.release-please.outputs.tag_name }}.spdx.json
+          output-file: sbom.spdx.json
+
+      # ── Append Docker pull info to the GitHub Release body ───────────────
+      - name: Append Docker info to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          CURRENT=$(gh release view "${TAG}" --json body -q .body)
+          {
+            echo "${CURRENT}"
+            echo ""
+            echo "## Docker Image"
+            echo ""
+            echo '```'
+            echo "docker pull ghcr.io/nogamsung/claude-ops:${TAG}"
+            echo "docker run -p 8787:8787 ghcr.io/nogamsung/claude-ops:${TAG}"
+            echo '```'
+            echo ""
+            echo "**Image digest:** \`${DIGEST}\`"
+          } > /tmp/release-body.md
+          gh release edit "${TAG}" --notes-file /tmp/release-body.md
+
+      # ── Job summary ────────────────────────────────────────────────────────
+      - name: Image digest summary
+        if: always()
+        run: |
+          echo "## Release Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ needs.release-please.outputs.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
