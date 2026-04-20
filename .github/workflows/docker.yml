@@ -1,9 +1,10 @@
-name: Docker Build & Push
+name: Docker Build & Push (main)
 
+# Dev images for every main push. Versioned release images are built by
+# release-please.yml — see that workflow for semver/:latest tagging.
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       push:
@@ -36,15 +37,8 @@ jobs:
         with:
           images: ghcr.io/nogamsung/claude-ops
           tags: |
-            # push to main → :main + :sha-<short>
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=sha-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
-            # tag push v*.*.* → semver set + :latest (non-prerelease only)
-            type=semver,pattern={{raw}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=raw,value=main
+            type=sha,prefix=sha-,format=short
           labels: |
             org.opencontainers.image.title=claude-ops
             org.opencontainers.image.description=Scheduled autonomous dev agent powered by Claude Code
