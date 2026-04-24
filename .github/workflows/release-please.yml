@@ -3,6 +3,12 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing git tag to (re-)publish to GHCR (e.g. v0.2.0). Skips release-please and runs only the publish job.'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,13 +23,11 @@ permissions:
 jobs:
   release-please:
     name: Create / update release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
-      major: ${{ steps.release.outputs.major }}
-      minor: ${{ steps.release.outputs.minor }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -35,12 +39,60 @@ jobs:
   publish:
     name: Build & Push Release Image
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: |
+      always() &&
+      (
+        (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
+        github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     steps:
+      # ── Resolve tag/version metadata ─────────────────────────────────────
+      # Works for both release-please push flow and manual workflow_dispatch
+      # (re-publish an existing tag). GITHUB_TOKEN-created tags don't fire
+      # workflow triggers, so dispatch is the escape hatch when a release
+      # misses its publish run.
+      - name: Resolve release metadata
+        id: meta_vars
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RP_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_TAG"
+          else
+            TAG="$RP_TAG"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag resolved (event=$EVENT)"
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not a valid semver tag (vX.Y.Z[-pre])"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          CORE="${VERSION%%-*}"
+          MAJOR="${CORE%%.*}"
+          REST="${CORE#*.}"
+          MINOR="${REST%%.*}"
+          if [[ "$VERSION" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "major=$MAJOR"
+            echo "minor=$MINOR"
+            echo "is_prerelease=$IS_PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ steps.meta_vars.outputs.tag }}
 
       # ── Metadata ────────────────────────────────────────────────────────────
       # GITHUB_TOKEN-created tags don't fire workflow triggers, so we emit the
@@ -50,11 +102,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-          VERSION: ${{ needs.release-please.outputs.version }}
-          MAJOR: ${{ needs.release-please.outputs.major }}
-          MINOR: ${{ needs.release-please.outputs.minor }}
-          IS_PRERELEASE: ${{ contains(needs.release-please.outputs.tag_name, '-') }}
+          TAG: ${{ steps.meta_vars.outputs.tag }}
+          VERSION: ${{ steps.meta_vars.outputs.version }}
+          MAJOR: ${{ steps.meta_vars.outputs.major }}
+          MINOR: ${{ steps.meta_vars.outputs.minor }}
+          IS_PRERELEASE: ${{ steps.meta_vars.outputs.is_prerelease }}
         with:
           images: ghcr.io/nogamsung/claude-ops
           tags: |
@@ -100,7 +152,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ needs.release-please.outputs.tag_name }}
+            VERSION=${{ steps.meta_vars.outputs.tag }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.build_date.outputs.value }}
           provenance: true
@@ -121,19 +173,25 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           image: ghcr.io/nogamsung/claude-ops@${{ steps.build.outputs.digest }}
-          artifact-name: sbom-${{ needs.release-please.outputs.tag_name }}.spdx.json
+          artifact-name: sbom-${{ steps.meta_vars.outputs.tag }}.spdx.json
           output-file: sbom.spdx.json
 
       # ── Append Docker pull info to the GitHub Release body ───────────────
       - name: Append Docker info to release notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
+          TAG: ${{ steps.meta_vars.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           CURRENT=$(gh release view "${TAG}" --json body -q .body)
+          # Strip any previous Docker Image block so re-publish doesn't stack duplicates.
+          CLEAN=$(printf '%s\n' "${CURRENT}" | awk '
+            /^## Docker Image$/ { skip=1 }
+            skip && /^## / && !/^## Docker Image$/ { skip=0 }
+            !skip { print }
+          ')
           {
-            echo "${CURRENT}"
+            printf '%s\n' "${CLEAN}"
             echo ""
             echo "## Docker Image"
             echo ""
@@ -152,7 +210,7 @@ jobs:
         run: |
           echo "## Release Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** \`${{ needs.release-please.outputs.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`${{ steps.meta_vars.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
