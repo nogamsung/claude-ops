@@ -32,9 +32,9 @@ func (p *printer) printJSON(v interface{}) error {
 // printTable writes tab-separated rows using tabwriter.
 func (p *printer) printTable(headers []string, rows [][]string) {
 	w := tabwriter.NewWriter(p.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
 	for _, row := range rows {
-		fmt.Fprintln(w, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(w, strings.Join(row, "\t"))
 	}
 	w.Flush() //nolint:errcheck // tabwriter flush to stdout; error not actionable
 }

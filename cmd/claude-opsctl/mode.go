@@ -80,6 +80,6 @@ func printFullMode(p *printer, resp fullModeResponse) {
 	if resp.Enabled {
 		state = "enabled"
 	}
-	fmt.Fprintf(p.out, "full_mode: %s\n", state)
-	fmt.Fprintf(p.out, "since:     %s\n", formatTime(resp.Since))
+	_, _ = fmt.Fprintf(p.out, "full_mode: %s\n", state)
+	_, _ = fmt.Fprintf(p.out, "since:     %s\n", formatTime(resp.Since))
 }

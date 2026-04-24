@@ -91,14 +91,14 @@ func newLimitsSetCmd(client *Client) *cobra.Command {
 }
 
 func printLimits(p *printer, resp limitsResponse) {
-	fmt.Fprintf(p.out, "daily:  %d / %d  (%s)\n", resp.Daily.Count, resp.Daily.Max, resp.Daily.Date)
-	fmt.Fprintf(p.out, "weekly: %d / %d  (%s)\n", resp.Weekly.Count, resp.Weekly.Max, resp.Weekly.Week)
+	_, _ = fmt.Fprintf(p.out, "daily:  %d / %d  (%s)\n", resp.Daily.Count, resp.Daily.Max, resp.Daily.Date)
+	_, _ = fmt.Fprintf(p.out, "weekly: %d / %d  (%s)\n", resp.Weekly.Count, resp.Weekly.Max, resp.Weekly.Week)
 
 	if resp.Reason != "" {
-		fmt.Fprintf(p.out, "reason: %s\n", resp.Reason)
+		_, _ = fmt.Fprintf(p.out, "reason: %s\n", resp.Reason)
 	}
 	if resp.RateLimit.BlockedUntil != nil {
-		fmt.Fprintf(p.out, "rate_limit_type:  %s\n", resp.RateLimit.RateLimitType)
-		fmt.Fprintf(p.out, "blocked_until:    %s\n", formatTime(resp.RateLimit.BlockedUntil))
+		_, _ = fmt.Fprintf(p.out, "rate_limit_type:  %s\n", resp.RateLimit.RateLimitType)
+		_, _ = fmt.Fprintf(p.out, "blocked_until:    %s\n", formatTime(resp.RateLimit.BlockedUntil))
 	}
 }

@@ -66,7 +66,7 @@ func newTasksLsCmd(client *Client) *cobra.Command {
 			p.printTable(headers, rows)
 
 			if resp.NextCursor != "" {
-				fmt.Fprintf(p.out, "\nnext_cursor: %s\n", resp.NextCursor)
+				_, _ = fmt.Fprintf(p.out, "\nnext_cursor: %s\n", resp.NextCursor)
 			}
 			return nil
 		},
@@ -96,22 +96,22 @@ func newTasksShowCmd(client *Client) *cobra.Command {
 				return p.printJSON(resp)
 			}
 
-			fmt.Fprintf(p.out, "id:          %s\n", resp.ID)
-			fmt.Fprintf(p.out, "repo:        %s\n", resp.RepoFullName)
-			fmt.Fprintf(p.out, "issue:       #%d %s\n", resp.IssueNumber, resp.IssueTitle)
-			fmt.Fprintf(p.out, "type:        %s\n", resp.TaskType)
-			fmt.Fprintf(p.out, "status:      %s\n", resp.Status)
-			fmt.Fprintf(p.out, "pr_url:      %s\n", orDash(resp.PRURL))
-			fmt.Fprintf(p.out, "started_at:  %s\n", formatTime(resp.StartedAt))
-			fmt.Fprintf(p.out, "finished_at: %s\n", formatTime(resp.FinishedAt))
-			fmt.Fprintf(p.out, "created_at:  %s\n", formatTime(&resp.CreatedAt))
+			_, _ = fmt.Fprintf(p.out, "id:          %s\n", resp.ID)
+			_, _ = fmt.Fprintf(p.out, "repo:        %s\n", resp.RepoFullName)
+			_, _ = fmt.Fprintf(p.out, "issue:       #%d %s\n", resp.IssueNumber, resp.IssueTitle)
+			_, _ = fmt.Fprintf(p.out, "type:        %s\n", resp.TaskType)
+			_, _ = fmt.Fprintf(p.out, "status:      %s\n", resp.Status)
+			_, _ = fmt.Fprintf(p.out, "pr_url:      %s\n", orDash(resp.PRURL))
+			_, _ = fmt.Fprintf(p.out, "started_at:  %s\n", formatTime(resp.StartedAt))
+			_, _ = fmt.Fprintf(p.out, "finished_at: %s\n", formatTime(resp.FinishedAt))
+			_, _ = fmt.Fprintf(p.out, "created_at:  %s\n", formatTime(&resp.CreatedAt))
 
 			if resp.StderrTail != "" {
-				fmt.Fprintf(p.out, "\n--- stderr tail ---\n%s\n", resp.StderrTail)
+				_, _ = fmt.Fprintf(p.out, "\n--- stderr tail ---\n%s\n", resp.StderrTail)
 			}
 
 			if len(resp.Events) > 0 {
-				fmt.Fprintln(p.out, "\n--- events ---")
+				_, _ = fmt.Fprintln(p.out, "\n--- events ---")
 				headers := []string{"KIND", "CREATED_AT", "PAYLOAD"}
 				rows := make([][]string, len(resp.Events))
 				for i, e := range resp.Events {
@@ -162,8 +162,8 @@ func newTasksRunCmd(client *Client) *cobra.Command {
 				return p.printJSON(resp)
 			}
 
-			fmt.Fprintf(p.out, "enqueued task %s\n", resp.ID)
-			fmt.Fprintf(p.out, "status: %s\n", resp.Status)
+			_, _ = fmt.Fprintf(p.out, "enqueued task %s\n", resp.ID)
+			_, _ = fmt.Fprintf(p.out, "status: %s\n", resp.Status)
 			return nil
 		},
 	}

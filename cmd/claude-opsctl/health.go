@@ -28,9 +28,9 @@ func newHealthCmd(client *Client) *cobra.Command {
 			if resp.TickAt != nil {
 				tickAt = formatTime(resp.TickAt)
 			}
-			fmt.Fprintf(p.out, "status:    %s\n", resp.Status)
-			fmt.Fprintf(p.out, "full_mode: %v\n", resp.FullMode)
-			fmt.Fprintf(p.out, "tick_at:   %s\n", tickAt)
+			_, _ = fmt.Fprintf(p.out, "status:    %s\n", resp.Status)
+			_, _ = fmt.Fprintf(p.out, "full_mode: %v\n", resp.FullMode)
+			_, _ = fmt.Fprintf(p.out, "tick_at:   %s\n", tickAt)
 			return nil
 		},
 	}
