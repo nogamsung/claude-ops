@@ -115,4 +115,3 @@ func (ms *MaintenanceScheduler) fire(ctx context.Context, mt config.MaintenanceT
 	}
 	slog.Info("maintenance-scheduler: task enqueued", "name", mt.Name, "task_id", task.ID, "repo", task.RepoFullName)
 }
-

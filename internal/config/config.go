@@ -41,18 +41,18 @@ type RuntimeConfig struct {
 
 // SchedulerConfig defines active time windows and maintenance tasks.
 type SchedulerConfig struct {
-	ActiveWindows    []WindowConfig        `mapstructure:"active_windows"`
+	ActiveWindows    []WindowConfig          `mapstructure:"active_windows"`
 	MaintenanceTasks []MaintenanceTaskConfig `mapstructure:"maintenance_tasks"`
 }
 
 // MaintenanceTaskConfig describes a cron-triggered maintenance task.
 type MaintenanceTaskConfig struct {
-	Name           string            `mapstructure:"name"`
-	Cron           string            `mapstructure:"cron"`
-	Repo           string            `mapstructure:"repo"`
-	PromptTemplate string            `mapstructure:"prompt_template"`
-	Labels         []string          `mapstructure:"labels"`
-	BudgetSubCap   SubCapConfig      `mapstructure:"budget_sub_cap"`
+	Name           string       `mapstructure:"name"`
+	Cron           string       `mapstructure:"cron"`
+	Repo           string       `mapstructure:"repo"`
+	PromptTemplate string       `mapstructure:"prompt_template"`
+	Labels         []string     `mapstructure:"labels"`
+	BudgetSubCap   SubCapConfig `mapstructure:"budget_sub_cap"`
 }
 
 // SubCapConfig constrains how many times a maintenance task may run within a period.
