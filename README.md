@@ -100,6 +100,23 @@ scrape_configs:
       - targets: ['127.0.0.1:8787']
 ```
 
+### Quality gate (선택)
+
+`config.yaml` 의 `repos[].checks.commands` 에 lint/test 명령어를 등록하면 Claude 작업이 끝난 직후, **PR 생성 전에 worktree 안에서 순차 실행**됩니다. 하나라도 실패하면 PR 은 생성되지 않고 task 는 `failed` 로 기록, worktree 는 재시도를 위해 보존됩니다.
+
+```yaml
+repos:
+  - name: "owner/repo"
+    checks:
+      commands:
+        - "go build ./..."
+        - "go test ./..."
+        - "golangci-lint run ./..."
+      timeout: "5m"          # per-command; SIGTERM → 5s → SIGKILL
+```
+
+실패 시 Slack 알림에 실패한 명령어·exit code·출력 마지막 50줄이 포함됩니다.
+
 ---
 
 ## 개발

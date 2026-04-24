@@ -133,6 +133,16 @@ func (c *Config) validateRepos() error {
 		if r.DefaultBranch == "" {
 			c.GitHub.Repos[i].DefaultBranch = "main"
 		}
+		if len(r.Checks.Commands) > 0 {
+			for j, cmd := range r.Checks.Commands {
+				if strings.TrimSpace(cmd) == "" {
+					return fmt.Errorf("github.repos[%d].checks.commands[%d]: command cannot be empty", i, j)
+				}
+			}
+			if r.Checks.Timeout <= 0 {
+				c.GitHub.Repos[i].Checks.Timeout = 5 * time.Minute
+			}
+		}
 	}
 	return nil
 }
