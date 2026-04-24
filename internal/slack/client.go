@@ -53,6 +53,16 @@ func (c *Client) NotifyCancelled(ctx context.Context, task *domain.Task) error {
 	return c.postMessage(ctx, msg)
 }
 
+// NotifyOrphaned sends a "Task orphaned (manual review required)" message so
+// operators notice unfinished work whose worktree has uncommitted changes.
+// Reuses the failed-message template with an "orphaned" prefix — keeping
+// Slack surface small while still distinguishing the state.
+func (c *Client) NotifyOrphaned(ctx context.Context, task *domain.Task) error {
+	detail := fmt.Sprintf("orphaned — worktree %q has unsaved changes; manual review required", task.WorktreePath)
+	msg := BuildFailed(task.RepoFullName, task.IssueNumber, detail)
+	return c.postMessage(ctx, msg)
+}
+
 // NotifyModeChange sends a full-mode change notification.
 func (c *Client) NotifyModeChange(ctx context.Context, enabled bool) error {
 	msg := BuildModeChange(enabled)

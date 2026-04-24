@@ -32,11 +32,12 @@ type LimitsConfig struct {
 // RuntimeConfig holds server and storage settings.
 type RuntimeConfig struct {
 	HTTPBindAddr string        `mapstructure:"http_bind_addr"`
-	DBPath       string        `mapstructure:"db_path"`
-	LogLevel     string        `mapstructure:"log_level"`
-	TickInterval time.Duration `mapstructure:"tick_interval"`
-	WorktreeRoot string        `mapstructure:"worktree_root"`
-	PromptsDir   string        `mapstructure:"prompts_dir"`
+	DBPath                 string        `mapstructure:"db_path"`
+	LogLevel               string        `mapstructure:"log_level"`
+	TickInterval           time.Duration `mapstructure:"tick_interval"`
+	WorktreeRoot           string        `mapstructure:"worktree_root"`
+	PromptsDir             string        `mapstructure:"prompts_dir"`
+	WorktreeRetentionDays  int           `mapstructure:"worktree_retention_days"`
 }
 
 // SchedulerConfig defines active time windows and maintenance tasks.
@@ -124,6 +125,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("runtime.tick_interval", "30s")
 	v.SetDefault("runtime.worktree_root", ".worktrees")
 	v.SetDefault("runtime.prompts_dir", "prompts")
+	v.SetDefault("runtime.worktree_retention_days", 7)
 	v.SetDefault("github.poll_interval", "60s")
 	v.SetDefault("limits.daily_max_tasks", 5)
 	v.SetDefault("limits.weekly_max_tasks", 0) // 0 → derived = daily * 7
