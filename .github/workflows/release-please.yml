@@ -73,10 +73,6 @@ jobs:
             exit 1
           fi
           VERSION="${TAG#v}"
-          CORE="${VERSION%%-*}"
-          MAJOR="${CORE%%.*}"
-          REST="${CORE#*.}"
-          MINOR="${REST%%.*}"
           if [[ "$VERSION" == *-* ]]; then
             IS_PRERELEASE=true
           else
@@ -85,8 +81,6 @@ jobs:
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
-            echo "major=$MAJOR"
-            echo "minor=$MINOR"
             echo "is_prerelease=$IS_PRERELEASE"
           } >> "$GITHUB_OUTPUT"
 
@@ -95,25 +89,19 @@ jobs:
           ref: ${{ steps.meta_vars.outputs.tag }}
 
       # ── Metadata ────────────────────────────────────────────────────────────
-      # GITHUB_TOKEN-created tags don't fire workflow triggers, so we emit the
-      # full semver tag set inline here instead of relying on docker/metadata
-      # semver parsing.
+      # Emit only `vX.Y.Z` + `latest` (stable releases). Re-running on an
+      # existing tag simply overwrites the manifest — that's intentional.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         env:
           TAG: ${{ steps.meta_vars.outputs.tag }}
           VERSION: ${{ steps.meta_vars.outputs.version }}
-          MAJOR: ${{ steps.meta_vars.outputs.major }}
-          MINOR: ${{ steps.meta_vars.outputs.minor }}
           IS_PRERELEASE: ${{ steps.meta_vars.outputs.is_prerelease }}
         with:
           images: ghcr.io/nogamsung/claude-ops
           tags: |
             type=raw,value=${{ env.TAG }}
-            type=raw,value=${{ env.VERSION }}
-            type=raw,value=${{ env.MAJOR }}.${{ env.MINOR }}
-            type=raw,value=${{ env.MAJOR }},enable=${{ env.MAJOR != '0' && env.IS_PRERELEASE == 'false' }}
             type=raw,value=latest,enable=${{ env.IS_PRERELEASE == 'false' }}
           labels: |
             org.opencontainers.image.title=claude-ops
