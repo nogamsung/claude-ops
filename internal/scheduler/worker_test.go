@@ -36,10 +36,12 @@ func (s *fakeSlack) NotifyCancelled(_ context.Context, _ *domain.Task) error {
 
 // fakePRCreator implements scheduler.PRCreator.
 type fakePRCreator struct {
-	err error
+	err   error
+	calls int
 }
 
 func (p *fakePRCreator) CreatePR(_ context.Context, _ *domain.Task) (string, int, error) {
+	p.calls++
 	if p.err != nil {
 		return "", 0, p.err
 	}

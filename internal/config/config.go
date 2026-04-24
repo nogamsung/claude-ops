@@ -67,10 +67,14 @@ type RepoConfig struct {
 	Checks        ChecksConfig `mapstructure:"checks"`
 }
 
-// ChecksConfig flags which additional analysis types are enabled per repo.
+// ChecksConfig flags which additional analysis types are enabled per repo
+// and — via Commands — defines post-task quality-gate commands that must
+// succeed before a PR is opened.
 type ChecksConfig struct {
-	Security bool `mapstructure:"security"`
-	Perf     bool `mapstructure:"perf"`
+	Security bool          `mapstructure:"security"`
+	Perf     bool          `mapstructure:"perf"`
+	Commands []string      `mapstructure:"commands"`
+	Timeout  time.Duration `mapstructure:"timeout"`
 }
 
 // SlackConfig holds Slack integration settings.

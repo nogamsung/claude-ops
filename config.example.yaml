@@ -38,6 +38,16 @@ github:
       checks:
         security: true
         perf: false
+        # Post-task quality gate: commands run inside the task worktree after
+        # Claude finishes but before a PR is opened. First failure aborts the
+        # pipeline — PR is not created, worktree is preserved for inspection,
+        # task is marked failed with the command output tail.
+        # timeout applies per command (default 5m); SIGTERM → 5s → SIGKILL.
+        commands:
+          - "go build ./..."
+          - "go test ./..."
+          - "golangci-lint run ./..."
+        timeout: "5m"
 
 slack:
   channel_id: "C0XXXXXXX"

@@ -31,6 +31,7 @@ import (
 	"github.com/gs97ahn/claude-ops/internal/domain"
 	igithub "github.com/gs97ahn/claude-ops/internal/github"
 	"github.com/gs97ahn/claude-ops/internal/metrics"
+	"github.com/gs97ahn/claude-ops/internal/qualitygate"
 	"github.com/gs97ahn/claude-ops/internal/repository"
 	"github.com/gs97ahn/claude-ops/internal/scheduler"
 	islack "github.com/gs97ahn/claude-ops/internal/slack"
@@ -161,6 +162,9 @@ func run() error {
 		Clock:    metricsClockAdapter{clock: sharedClock},
 	})
 
+	// Quality gate (per-repo lint/test/build before PR).
+	qgAdapter := qualitygate.NewAdapter(cfg.GitHub.Repos)
+
 	// Worker.
 	workerCfg := scheduler.WorkerConfig{
 		TaskRepo:     taskRepo,
@@ -172,6 +176,7 @@ func run() error {
 		PRCreator:    &schedulerPRAdapter{inner: prCreator},
 		Budget:       budgetUC,
 		Metrics:      &schedulerMetricsAdapter{inner: metricsRecorder},
+		QualityGate:  qgAdapter,
 		Windows:      windows,
 		WorktreeRoot: cfg.Runtime.WorktreeRoot,
 		PromptsDir:   cfg.Runtime.PromptsDir,

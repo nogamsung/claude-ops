@@ -49,6 +49,24 @@ type MetricsRecorder interface {
 	RecordWindowClose()
 }
 
+// QualityGateResult mirrors qualitygate.Result without pulling the package in
+// as an import — scheduler must not depend on its consumer.
+type QualityGateResult struct {
+	Passed        bool
+	FailedCommand string
+	ExitCode      int
+	OutputTail    string
+}
+
+// QualityGate runs per-repo verification commands against a task's worktree
+// before the PR is created. Lookup returns (commands, timeout, ok=true) when
+// the repo has gates configured. A nil QualityGate or an unknown repo means
+// "no gating" — the default for back-compat.
+type QualityGate interface {
+	Lookup(repoFullName string) (commands []string, timeout time.Duration, ok bool)
+	Run(ctx context.Context, worktreeDir string, commands []string, timeout time.Duration) QualityGateResult
+}
+
 // WorkerConfig holds dependencies for the Worker.
 type WorkerConfig struct {
 	TaskRepo     domain.TaskRepository
@@ -60,6 +78,7 @@ type WorkerConfig struct {
 	PRCreator    PRCreator
 	Budget       BudgetEnforcer
 	Metrics      MetricsRecorder
+	QualityGate  QualityGate
 	Clock        Clock
 	Windows      []*domain.ActiveWindow
 	WorktreeRoot string
@@ -206,6 +225,26 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 	if result != nil {
 		task.EstimatedInputTokens = result.InputTokens
 		task.EstimatedOutputTokens = result.OutputTokens
+	}
+
+	// Quality gate: run repo-configured lint/test commands in the worktree
+	// before opening a PR. Failure here intentionally preserves the worktree
+	// (for manual inspection / retry) — we only skip PR creation and fail.
+	if w.cfg.QualityGate != nil {
+		if cmds, timeout, ok := w.cfg.QualityGate.Lookup(task.RepoFullName); ok && len(cmds) > 0 {
+			gateRes := w.cfg.QualityGate.Run(ctx, worktreePath, cmds, timeout)
+			if !gateRes.Passed {
+				msg := fmt.Sprintf("quality gate failed: %q exit=%d\n---\n%s",
+					gateRes.FailedCommand, gateRes.ExitCode, gateRes.OutputTail)
+				w.recordEvent(ctx, task.ID, domain.EventKindFailed, map[string]interface{}{
+					"stage":          "quality_gate",
+					"failed_command": gateRes.FailedCommand,
+					"exit_code":      gateRes.ExitCode,
+				})
+				// Do NOT remove worktree — leave for retry/inspection.
+				return w.fail(ctx, task, msg)
+			}
+		}
 	}
 
 	// Create PR.
