@@ -31,13 +31,13 @@ type LimitsConfig struct {
 
 // RuntimeConfig holds server and storage settings.
 type RuntimeConfig struct {
-	HTTPBindAddr string        `mapstructure:"http_bind_addr"`
-	DBPath                 string        `mapstructure:"db_path"`
-	LogLevel               string        `mapstructure:"log_level"`
-	TickInterval           time.Duration `mapstructure:"tick_interval"`
-	WorktreeRoot           string        `mapstructure:"worktree_root"`
-	PromptsDir             string        `mapstructure:"prompts_dir"`
-	WorktreeRetentionDays  int           `mapstructure:"worktree_retention_days"`
+	HTTPBindAddr          string        `mapstructure:"http_bind_addr"`
+	DBPath                string        `mapstructure:"db_path"`
+	LogLevel              string        `mapstructure:"log_level"`
+	TickInterval          time.Duration `mapstructure:"tick_interval"`
+	WorktreeRoot          string        `mapstructure:"worktree_root"`
+	PromptsDir            string        `mapstructure:"prompts_dir"`
+	WorktreeRetentionDays int           `mapstructure:"worktree_retention_days"`
 }
 
 // SchedulerConfig defines active time windows and maintenance tasks.

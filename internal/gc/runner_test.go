@@ -182,8 +182,8 @@ func TestRecoverOrphans_CleanWorktree_MarksFailed(t *testing.T) {
 
 func TestSweepWorktrees_RemovesOlderThanRetention(t *testing.T) {
 	now := time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC)
-	old := now.AddDate(0, 0, -10)    // 10 days old — removed
-	recent := now.AddDate(0, 0, -3)  // 3 days — kept
+	old := now.AddDate(0, 0, -10)   // 10 days old — removed
+	recent := now.AddDate(0, 0, -3) // 3 days — kept
 
 	// Create real directories so removeWorktree attempts git/rm.
 	root := t.TempDir()
