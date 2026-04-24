@@ -69,6 +69,37 @@ curl -X POST http://127.0.0.1:8787/tasks \
   -d '{"repo": "owner/repo", "issue_number": 42}'
 ```
 
+### 관측 (Prometheus)
+
+`GET /metrics` 는 Prometheus text format 으로 6개 지표를 노출합니다 — Grafana 에서 직접 scrape.
+
+| 지표 | 타입 | 라벨 | 의미 |
+|------|------|------|------|
+| `claude_ops_task_duration_seconds` | histogram | `repo`, `status`, `task_type` | 큐 → 종료까지 end-to-end 시간 |
+| `claude_ops_tasks_total` | counter | `status` | terminal 상태 전이 횟수 |
+| `claude_ops_budget_gate_blocks_total` | counter | `reason` | budget gate 거부 건수 (`daily_cap_reached`, `weekly_cap_reached`, `rate_limited`, `window_closed`) |
+| `claude_ops_tasks_remaining` | gauge | `scope=daily\|weekly` | 남은 슬롯 (cap 미설정 시 `-1`) |
+| `claude_ops_rate_limit_block_seconds_remaining` | gauge | — | rate-limit 차단 해제까지 남은 초 |
+| `claude_ops_active_window_open` | gauge | — | 현재 active window 안이면 1 |
+
+```bash
+# Prometheus scrape
+curl http://127.0.0.1:8787/metrics
+
+# JSON 예측 (Prometheus 없이 빠른 확인)
+curl http://127.0.0.1:8787/metrics/forecast
+# => { "daily_used": 3, "daily_max": 10, "daily_eta": "2026-04-24T21:15:00Z", ... }
+```
+
+Prometheus scrape 설정 예시:
+
+```yaml
+scrape_configs:
+  - job_name: claude-ops
+    static_configs:
+      - targets: ['127.0.0.1:8787']
+```
+
 ---
 
 ## 개발
