@@ -41,7 +41,43 @@ make run
 ./bin/claude-ops -config config.yaml
 ```
 
-### API 사용 예시
+### claude-opsctl CLI
+
+`claude-opsctl`은 로컬 API를 래핑하는 CLI입니다. `CLAUDE_OPS_URL` 환경 변수로 엔드포인트를 오버라이드할 수 있습니다 (기본값: `http://127.0.0.1:8787`).
+
+```bash
+# 빌드
+make opsctl-build            # 현재 플랫폼
+make opsctl-release          # linux/amd64, linux/arm64, darwin/arm64 크로스 컴파일
+
+# 헬스 체크
+./bin/claude-opsctl health
+./bin/claude-opsctl health --output json
+
+# 작업 목록 조회
+./bin/claude-opsctl tasks ls
+./bin/claude-opsctl tasks ls --status queued
+./bin/claude-opsctl tasks ls --output json
+
+# 작업 상세 조회
+./bin/claude-opsctl tasks show <task-id>
+
+# 수동 작업 트리거
+./bin/claude-opsctl tasks run owner/repo --issue 42
+./bin/claude-opsctl tasks run owner/repo --issue 42 --type feature
+
+# Full mode 관리
+./bin/claude-opsctl mode full show
+./bin/claude-opsctl mode full --on
+./bin/claude-opsctl mode full --off
+
+# 한도 조회 및 오버라이드
+./bin/claude-opsctl limits show
+./bin/claude-opsctl limits set --daily 10
+./bin/claude-opsctl limits set --daily 10 --weekly 50
+```
+
+### API 사용 예시 (curl)
 
 ```bash
 # 헬스 체크

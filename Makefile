@@ -1,12 +1,15 @@
 BINARY_NAME    := claude-ops
+OPSCTL_NAME    := claude-opsctl
 CMD_DIR        := cmd/claude-ops
+OPSCTL_DIR     := cmd/claude-opsctl
 BIN_DIR        := bin
 COVERAGE_FILE  := coverage.out
 MIGRATIONS_DIR := migrations
 DB_PATH        ?= data/agent.db
 CONFIG_PATH    ?= config.example.yaml
 
-.PHONY: build run test cover lint swag sqlc migrate-up migrate-down docker clean help
+.PHONY: build run test cover lint swag sqlc migrate-up migrate-down docker clean help \
+        opsctl-build opsctl-release
 
 ## build: compile single binary
 build:
@@ -53,6 +56,21 @@ migrate-down:
 ## docker: build docker image
 docker:
 	docker build -f deployments/Dockerfile -t $(BINARY_NAME):latest .
+
+## opsctl-build: compile claude-opsctl for current platform
+opsctl-build:
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o $(BIN_DIR)/$(OPSCTL_NAME) ./$(OPSCTL_DIR)/...
+
+## opsctl-release: cross-compile claude-opsctl for linux/amd64, linux/arm64, darwin/arm64
+opsctl-release:
+	@mkdir -p $(BIN_DIR)
+	GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" \
+	  -o $(BIN_DIR)/$(OPSCTL_NAME)-linux-amd64 ./$(OPSCTL_DIR)/...
+	GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" \
+	  -o $(BIN_DIR)/$(OPSCTL_NAME)-linux-arm64 ./$(OPSCTL_DIR)/...
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" \
+	  -o $(BIN_DIR)/$(OPSCTL_NAME)-darwin-arm64 ./$(OPSCTL_DIR)/...
 
 ## clean: remove build artifacts
 clean:
