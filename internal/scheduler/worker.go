@@ -40,6 +40,15 @@ type BudgetEnforcer interface {
 	RecordRateLimitBlock(ctx context.Context, resetsAtUnix int64, rateLimitType string, observedAt time.Time) error
 }
 
+// MetricsRecorder receives task-lifecycle and budget-gate signals for export.
+// All methods must be non-blocking — scraping lives off-thread, recording
+// lives on the worker hot path.
+type MetricsRecorder interface {
+	RecordTaskFinished(repo, taskType, status string, startedAt, finishedAt time.Time)
+	RecordBudgetBlock(reason BudgetReason)
+	RecordWindowClose()
+}
+
 // WorkerConfig holds dependencies for the Worker.
 type WorkerConfig struct {
 	TaskRepo     domain.TaskRepository
@@ -50,6 +59,7 @@ type WorkerConfig struct {
 	Slack        SlackNotifier
 	PRCreator    PRCreator
 	Budget       BudgetEnforcer
+	Metrics      MetricsRecorder
 	Clock        Clock
 	Windows      []*domain.ActiveWindow
 	WorktreeRoot string
@@ -128,6 +138,9 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 	// Re-check window gate (double gate).
 	fullMode := w.isFullMode(ctx)
 	if !AllowNow(w.cfg.Clock.Now(), fullMode, w.cfg.Windows) {
+		if w.cfg.Metrics != nil {
+			w.cfg.Metrics.RecordWindowClose()
+		}
 		_ = w.removeWorktree(task.WorktreePath)
 		return w.cancel(ctx, task)
 	}
@@ -144,6 +157,9 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 		}
 		if reason != BudgetReasonAllowed {
 			slog.Info("worker: budget gate blocks task", "task_id", task.ID, "reason", string(reason))
+			if w.cfg.Metrics != nil {
+				w.cfg.Metrics.RecordBudgetBlock(reason)
+			}
 			_ = w.removeWorktree(task.WorktreePath)
 			return w.cancel(ctx, task)
 		}
@@ -214,6 +230,7 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 	if err = w.cfg.TaskRepo.Update(ctx, task); err != nil {
 		slog.Error("worker: mark done", "err", err, "task_id", task.ID)
 	}
+	w.recordFinished(task)
 
 	// Notify Slack done.
 	if w.cfg.Slack != nil {
@@ -227,6 +244,22 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 	return nil
 }
 
+// recordFinished feeds task-duration + status metrics. Skipped silently if
+// no recorder is wired — tests and DI-minimal setups don't need it.
+func (w *Worker) recordFinished(task *domain.Task) {
+	if w.cfg.Metrics == nil {
+		return
+	}
+	var start, end time.Time
+	if task.StartedAt != nil {
+		start = *task.StartedAt
+	}
+	if task.FinishedAt != nil {
+		end = *task.FinishedAt
+	}
+	w.cfg.Metrics.RecordTaskFinished(task.RepoFullName, string(task.TaskType), string(task.Status), start, end)
+}
+
 func (w *Worker) fail(ctx context.Context, task *domain.Task, msg string) error {
 	slog.Error("worker: task failed", "task_id", task.ID, "msg", msg)
 	finishedAt := w.cfg.Clock.Now()
@@ -237,6 +270,7 @@ func (w *Worker) fail(ctx context.Context, task *domain.Task, msg string) error 
 		slog.Error("worker: update failed task", "err", err)
 	}
 	w.recordEvent(ctx, task.ID, domain.EventKindFailed, map[string]interface{}{"msg": msg})
+	w.recordFinished(task)
 	if w.cfg.Slack != nil {
 		if err := w.cfg.Slack.NotifyFailed(ctx, task, msg); err != nil {
 			slog.Warn("worker: slack notify failed", "err", err)
@@ -254,6 +288,7 @@ func (w *Worker) cancel(ctx context.Context, task *domain.Task) error {
 		slog.Error("worker: update cancelled task", "err", err)
 	}
 	w.recordEvent(ctx, task.ID, domain.EventKindCancelled, nil)
+	w.recordFinished(task)
 	_ = w.removeWorktree(task.WorktreePath)
 	if w.cfg.Slack != nil {
 		if err := w.cfg.Slack.NotifyCancelled(ctx, task); err != nil {

@@ -30,6 +30,7 @@ import (
 	"github.com/gs97ahn/claude-ops/internal/config"
 	"github.com/gs97ahn/claude-ops/internal/domain"
 	igithub "github.com/gs97ahn/claude-ops/internal/github"
+	"github.com/gs97ahn/claude-ops/internal/metrics"
 	"github.com/gs97ahn/claude-ops/internal/repository"
 	"github.com/gs97ahn/claude-ops/internal/scheduler"
 	islack "github.com/gs97ahn/claude-ops/internal/slack"
@@ -152,6 +153,14 @@ func run() error {
 		ResetTZ:      resetTZ,
 	})
 
+	// Metrics (Prometheus) — collector reads live from BudgetUseCase + windows.
+	metricsRecorder := metrics.New(metrics.Options{
+		Budget:   budgetUC,
+		Window:   &metricsWindowAdapter{windows: windows},
+		FullMode: &metricsFullModeAdapter{repo: appStateRepo},
+		Clock:    metricsClockAdapter{clock: sharedClock},
+	})
+
 	// Worker.
 	workerCfg := scheduler.WorkerConfig{
 		TaskRepo:     taskRepo,
@@ -162,6 +171,7 @@ func run() error {
 		Slack:        &schedulerSlackAdapter{client: slackClient},
 		PRCreator:    &schedulerPRAdapter{inner: prCreator},
 		Budget:       budgetUC,
+		Metrics:      &schedulerMetricsAdapter{inner: metricsRecorder},
 		Windows:      windows,
 		WorktreeRoot: cfg.Runtime.WorktreeRoot,
 		PromptsDir:   cfg.Runtime.PromptsDir,
@@ -195,6 +205,7 @@ func run() error {
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler(env.SlackSigningSecret, sched)
 	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
+	metrics.NewHandler(metricsRecorder).Register(router)
 
 	srv := &http.Server{
 		Addr:    cfg.Runtime.HTTPBindAddr,
@@ -298,3 +309,68 @@ func (g *windowsGateAdapter) AllowNow(now time.Time, _ bool) bool { // ADDED
 	} // ADDED
 	return false // ADDED
 } // ADDED
+
+// schedulerMetricsAdapter forwards worker lifecycle signals to the metrics
+// package. Lives here (not in scheduler/) because scheduler must not import
+// a concrete metrics implementation — only the interface.
+type schedulerMetricsAdapter struct {
+	inner *metrics.Metrics
+}
+
+func (a *schedulerMetricsAdapter) RecordTaskFinished(repo, taskType, status string, startedAt, finishedAt time.Time) {
+	a.inner.RecordTaskFinished(repo, taskType, status, startedAt, finishedAt)
+}
+
+func (a *schedulerMetricsAdapter) RecordBudgetBlock(reason scheduler.BudgetReason) {
+	a.inner.RecordBudgetBlock(reason)
+}
+
+func (a *schedulerMetricsAdapter) RecordWindowClose() {
+	a.inner.RecordWindowClose()
+}
+
+// metricsWindowAdapter exposes the current set of active windows to the
+// metrics collector so scrape-time can compute the "window open" gauge. Full
+// mode is handled by a sibling adapter — both together decide dispatchability.
+type metricsWindowAdapter struct {
+	windows []*domain.ActiveWindow
+}
+
+func (a *metricsWindowAdapter) IsOpen(t time.Time, fullMode bool) bool {
+	if fullMode {
+		return true
+	}
+	for _, w := range a.windows {
+		if w.Contains(t) {
+			return true
+		}
+	}
+	return false
+}
+
+// metricsFullModeAdapter bridges the AppState-backed full_mode toggle to the
+// metrics package without exposing the repository directly.
+type metricsFullModeAdapter struct {
+	repo domain.AppStateRepository
+}
+
+func (a *metricsFullModeAdapter) IsFullMode(ctx context.Context) bool {
+	if a.repo == nil {
+		return false
+	}
+	state, err := a.repo.Get(ctx, "full_mode")
+	if err != nil || state == nil {
+		return false
+	}
+	v := state.ValueJSON
+	return v == "true" || v == "1" || v == `{"enabled":true}`
+}
+
+// metricsClockAdapter lets the metrics package observe the same clock the
+// scheduler uses — important for tests that fake time, and for production
+// consistency across the "would the scheduler dispatch now?" question.
+type metricsClockAdapter struct {
+	clock scheduler.Clock
+}
+
+func (a metricsClockAdapter) Now() time.Time { return a.clock.Now() }

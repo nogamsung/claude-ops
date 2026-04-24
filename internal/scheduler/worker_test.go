@@ -87,3 +87,59 @@ func (r *fakeEventRepo) Create(_ context.Context, _ *domain.TaskEvent) error { r
 func (r *fakeEventRepo) ListByTaskID(_ context.Context, _ string, _ int) ([]*domain.TaskEvent, error) {
 	return nil, nil
 }
+
+// fakeMetrics captures MetricsRecorder calls for assertion.
+type fakeMetrics struct {
+	finished []finishedCall
+	blocks   []scheduler.BudgetReason
+	closes   int
+}
+
+type finishedCall struct {
+	Repo, Type, Status string
+	Start, End         time.Time
+}
+
+func (m *fakeMetrics) RecordTaskFinished(repo, tt, status string, start, end time.Time) {
+	m.finished = append(m.finished, finishedCall{repo, tt, status, start, end})
+}
+func (m *fakeMetrics) RecordBudgetBlock(reason scheduler.BudgetReason) {
+	m.blocks = append(m.blocks, reason)
+}
+func (m *fakeMetrics) RecordWindowClose() { m.closes++ }
+
+// TestWorker_MetricsRecorded_OnFailure exercises the fail() path and asserts
+// the MetricsRecorder sees the terminal-status call.
+func TestWorker_MetricsRecorded_OnFailure(t *testing.T) {
+	taskRepo := &fakeTaskRepo{}
+	task := &domain.Task{
+		ID:           "metrics-fail",
+		Status:       domain.TaskStatusQueued,
+		RepoFullName: "owner/repo",
+		IssueNumber:  7,
+		TaskType:     domain.TaskTypeFeature,
+	}
+	taskRepo.tasks = append(taskRepo.tasks, task)
+
+	m := &fakeMetrics{}
+	worker := scheduler.NewWorker(scheduler.WorkerConfig{
+		TaskRepo:     taskRepo,
+		EventRepo:    &fakeEventRepo{},
+		Slack:        &fakeSlack{},
+		PRCreator:    &fakePRCreator{},
+		Metrics:      m,
+		Clock:        &scheduler.FakeClock{T: time.Now()},
+		WorktreeRoot: t.TempDir(),
+		PromptsDir:   "/nonexistent_prompts_dir",
+	})
+
+	_ = worker.RunTask(context.Background(), task)
+
+	if len(m.finished) != 1 {
+		t.Fatalf("expected 1 RecordTaskFinished call, got %d", len(m.finished))
+	}
+	got := m.finished[0]
+	if got.Repo != "owner/repo" || got.Type != "feature" || got.Status != "failed" {
+		t.Errorf("unexpected finish call: %+v", got)
+	}
+}
