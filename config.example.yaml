@@ -5,6 +5,9 @@ runtime:
   tick_interval: "30s"
   worktree_root: ".worktrees"
   prompts_dir: "prompts"
+  # GC removes worktrees for failed/cancelled tasks older than this many days.
+  # Runs on boot and every 24h. 0 disables GC.
+  worktree_retention_days: 7
 
 limits:
   # Daily 上限. 0 이면 weekly_max_tasks 에서 자동 유도 (ceil(weekly/7)).

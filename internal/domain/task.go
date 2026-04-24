@@ -6,14 +6,18 @@ import "time"
 // TaskStatus represents the lifecycle state of a task.
 type TaskStatus string
 
-// TaskStatusQueued, TaskStatusRunning, TaskStatusDone, TaskStatusFailed, and
-// TaskStatusCancelled enumerate the task lifecycle states.
+// TaskStatusQueued, TaskStatusRunning, TaskStatusDone, TaskStatusFailed,
+// TaskStatusCancelled, and TaskStatusOrphaned enumerate the task lifecycle
+// states. Orphaned means: the service restarted while the task was running
+// and we found a dirty worktree — needs human judgment before we decide
+// whether to retry or discard.
 const (
 	TaskStatusQueued    TaskStatus = "queued"
 	TaskStatusRunning   TaskStatus = "running"
 	TaskStatusDone      TaskStatus = "done"
 	TaskStatusFailed    TaskStatus = "failed"
 	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusOrphaned  TaskStatus = "orphaned"
 )
 
 // TaskType represents the category of work a task performs.

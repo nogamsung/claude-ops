@@ -29,6 +29,7 @@ import (
 	"github.com/gs97ahn/claude-ops/internal/claude"
 	"github.com/gs97ahn/claude-ops/internal/config"
 	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/gc"
 	igithub "github.com/gs97ahn/claude-ops/internal/github"
 	"github.com/gs97ahn/claude-ops/internal/metrics"
 	"github.com/gs97ahn/claude-ops/internal/qualitygate"
@@ -119,11 +120,16 @@ func run() error {
 		return fmt.Errorf("parse windows: %w", err)
 	}
 
-	// Mark orphan running tasks on startup.
-	markOrphans(context.Background(), taskRepo)
-
-	// Slack client.
+	// Slack client — instantiated before GC so the orphan notifier hook works.
 	slackClient := islack.NewClient(env.SlackBotToken, cfg.Slack.ChannelID)
+
+	// Mark orphan running tasks + sweep stale worktrees on startup. Policy
+	// (dirty worktree → orphaned, clean → failed) lives in internal/gc.
+	gcRunner := gc.NewRunner(gc.Config{
+		RetentionDays: cfg.Runtime.WorktreeRetentionDays,
+		Interval:      24 * time.Hour,
+	}, taskRepo, gc.ExecGitRunner{}, &gcSlackAdapter{client: slackClient}, nil)
+	gcRunner.RunOnBoot(context.Background())
 
 	// GitHub client + poller.
 	ghClient := igithub.NewClient(env.GitHubToken)
@@ -237,6 +243,7 @@ func run() error {
 	schedCtx, schedCancel := context.WithCancel(context.Background())
 	go sched.Start(schedCtx)
 	go maintenanceSched.Start(schedCtx)
+	go gcRunner.Start(schedCtx)
 
 	go func() {
 		slog.Info("HTTP server listening", "addr", cfg.Runtime.HTTPBindAddr)
@@ -263,23 +270,6 @@ func run() error {
 func checkCLI(name string) {
 	if _, err := exec.LookPath(name); err != nil {
 		slog.Warn("CLI tool not found in PATH", "tool", name)
-	}
-}
-
-func markOrphans(ctx context.Context, repo *repository.SQLiteTaskRepository) {
-	running, err := repo.GetRunning(ctx)
-	if err != nil {
-		slog.Error("mark orphans: list running", "err", err)
-		return
-	}
-	for _, t := range running {
-		t.Status = domain.TaskStatusFailed
-		t.StderrTail = "service restarted while task was running (orphaned)"
-		if updateErr := repo.Update(ctx, t); updateErr != nil {
-			slog.Error("mark orphan", "task_id", t.ID, "err", updateErr)
-		} else {
-			slog.Warn("orphaned task marked failed", "task_id", t.ID)
-		}
 	}
 }
 
@@ -393,3 +383,13 @@ type metricsClockAdapter struct {
 }
 
 func (a metricsClockAdapter) Now() time.Time { return a.clock.Now() }
+
+// gcSlackAdapter adapts islack.Client to gc.SlackNotifier. Defined here
+// rather than in the gc package so domain Slack logic stays in one place.
+type gcSlackAdapter struct {
+	client *islack.Client
+}
+
+func (a *gcSlackAdapter) NotifyOrphaned(ctx context.Context, task *domain.Task) error {
+	return a.client.NotifyOrphaned(ctx, task)
+}
