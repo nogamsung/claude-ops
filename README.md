@@ -67,7 +67,29 @@ curl -X PATCH http://127.0.0.1:8787/modes/limits \
 curl -X POST http://127.0.0.1:8787/tasks \
   -H 'Content-Type: application/json' \
   -d '{"repo": "owner/repo", "issue_number": 42}'
+
+# maintenance task 목록 필터
+curl 'http://127.0.0.1:8787/tasks?source=maintenance'
 ```
+
+### Scheduled maintenance (cron)
+
+`scheduler.maintenance_tasks` 에 주기 task 를 선언하면 GitHub 이슈 없이도 active window 안에서 자동 enqueue 됩니다. 글로벌 budget cap 은 그대로 적용되고, `budget_sub_cap` 으로 "이번 주 maintenance 는 최대 N번" 처럼 별도 상한을 걸 수 있습니다.
+
+```yaml
+scheduler:
+  maintenance_tasks:
+    - name: "daily-dep-update"
+      cron: "0 2 * * *"                         # 5-field 표준 cron
+      repo: "owner/repo"                         # github.repos allowlist 필수
+      prompt_template: "maintenance/dep-update.tmpl"
+      labels: ["chore", "maintenance"]
+      budget_sub_cap:
+        daily: 1
+        weekly: 3
+```
+
+active window 밖에서 cron 이 fire 하면 그 tick 은 skip — 다음 tick 을 기다립니다 (즉시 실행하지 않음). full mode 도 이 규칙을 우회하지 않습니다.
 
 ### 관측 (Prometheus)
 

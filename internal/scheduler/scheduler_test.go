@@ -45,6 +45,9 @@ func (r *fakeTaskRepo) List(_ context.Context, f domain.TaskFilter) ([]*domain.T
 		if f.Status != nil && t.Status != *f.Status {
 			continue
 		}
+		if f.Source != nil && t.Source != *f.Source {
+			continue
+		}
 		out = append(out, t)
 		if f.Limit > 0 && len(out) >= f.Limit {
 			break

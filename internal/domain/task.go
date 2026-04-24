@@ -27,6 +27,15 @@ const (
 	TaskTypePerf     TaskType = "perf"
 )
 
+// TaskSource identifies how a task was created.
+type TaskSource string
+
+// TaskSourceGitHubIssue and TaskSourceMaintenance enumerate task origin types.
+const (
+	TaskSourceGitHubIssue TaskSource = "github_issue"
+	TaskSourceMaintenance TaskSource = "maintenance"
+)
+
 // Task is the central aggregate of the scheduler system.
 type Task struct {
 	ID                    string
@@ -35,6 +44,8 @@ type Task struct {
 	IssueTitle            string
 	TaskType              TaskType
 	Status                TaskStatus
+	Source                TaskSource
+	MaintenanceName       string
 	PromptTemplate        string
 	WorktreePath          string
 	PRURL                 string

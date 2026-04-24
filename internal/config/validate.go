@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
@@ -24,6 +26,58 @@ func (c *Config) Validate() error {
 	}
 	if err := c.validateLimits(); err != nil {
 		return err
+	}
+	if err := c.validateMaintenanceTasks(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) validateMaintenanceTasks() error {
+	// Build repo allowlist for O(1) lookup.
+	repoSet := make(map[string]struct{}, len(c.GitHub.Repos))
+	for _, r := range c.GitHub.Repos {
+		repoSet[r.Name] = struct{}{}
+	}
+
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	seen := make(map[string]struct{})
+
+	for i, mt := range c.Scheduler.MaintenanceTasks {
+		name := strings.TrimSpace(mt.Name)
+		if name == "" {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d]: name is required", i)
+		}
+		if _, dup := seen[name]; dup {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d]: duplicate name %q", i, name)
+		}
+		seen[name] = struct{}{}
+
+		if mt.Cron == "" {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: cron is required", i, name)
+		}
+		if _, err := parser.Parse(mt.Cron); err != nil {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: invalid cron spec %q: %w", i, name, mt.Cron, err)
+		}
+
+		repo := strings.TrimSpace(mt.Repo)
+		if repo == "" {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: repo is required", i, name)
+		}
+		if _, ok := repoSet[repo]; !ok {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: repo %q not in github.repos allowlist", i, name, repo)
+		}
+
+		if mt.PromptTemplate == "" {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: prompt_template is required", i, name)
+		}
+
+		if mt.BudgetSubCap.Daily < 0 {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: budget_sub_cap.daily must be >= 0", i, name)
+		}
+		if mt.BudgetSubCap.Weekly < 0 {
+			return fmt.Errorf("scheduler.maintenance_tasks[%d] %q: budget_sub_cap.weekly must be >= 0", i, name)
+		}
 	}
 	return nil
 }
