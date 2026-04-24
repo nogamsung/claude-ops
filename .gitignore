@@ -10,6 +10,7 @@ docs/swagger/
 # Binary
 bin/
 /claude-ops
+/claude-opsctl
 
 # Environment
 .env
