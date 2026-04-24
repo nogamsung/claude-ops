@@ -28,6 +28,27 @@ scheduler:
       end: "20:00"
       tz: "Asia/Seoul"
 
+  # Cron-triggered maintenance tasks (optional).
+  # Each task fires according to its cron spec but only within an active window.
+  # Tasks count toward the global daily/weekly limit AND their own budget_sub_cap.
+  maintenance_tasks: []
+  # Example:
+  # maintenance_tasks:
+  #   - name: "daily-dep-update"
+  #     cron: "0 2 * * *"                 # 02:00 every day (5-field standard cron)
+  #     repo: "gs97ahn/example"           # must be in github.repos allowlist
+  #     prompt_template: "maintenance/dep-update.tmpl"
+  #     labels: ["chore", "maintenance"]
+  #     budget_sub_cap:
+  #       daily: 1
+  #       weekly: 3
+  #   - name: "weekly-security-scan"
+  #     cron: "0 3 * * mon"
+  #     repo: "gs97ahn/example"
+  #     prompt_template: "maintenance/security-scan.tmpl"
+  #     budget_sub_cap:
+  #       weekly: 1
+
 github:
   poll_interval: "60s"
   repos:

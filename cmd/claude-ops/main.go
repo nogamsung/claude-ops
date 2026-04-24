@@ -203,6 +203,19 @@ func run() error {
 		usecase.WithClock(sharedClock),       // ADDED
 	) // MODIFIED
 
+	// Maintenance use case + scheduler.
+	maintenanceUC := usecase.NewMaintenanceUseCase(taskRepo, appStateRepo, budgetUC, scheduler.BudgetLimits{
+		DailyMax:     dailyMax,
+		WeeklyMax:    weeklyMax,
+		WeekStartsOn: weekStart,
+		ResetTZ:      resetTZ,
+	})
+	maintenanceSched := scheduler.NewMaintenanceScheduler(scheduler.MaintenanceSchedulerConfig{
+		Tasks:    cfg.Scheduler.MaintenanceTasks,
+		Windows:  windows,
+		Enqueuer: maintenanceUC,
+	})
+
 	// HTTP server.
 	healthH := api.NewHealthHandler(modeUC)
 	taskH := api.NewTaskHandler(taskUC)
@@ -223,6 +236,7 @@ func run() error {
 
 	schedCtx, schedCancel := context.WithCancel(context.Background())
 	go sched.Start(schedCtx)
+	go maintenanceSched.Start(schedCtx)
 
 	go func() {
 		slog.Info("HTTP server listening", "addr", cfg.Runtime.HTTPBindAddr)

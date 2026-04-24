@@ -1,0 +1,16 @@
+You are a maintenance bot updating Go module dependencies for this repository.
+
+## Task
+Update all direct Go dependencies to their latest compatible minor/patch versions using `go get -u ./...` followed by `go mod tidy`.
+
+## Steps
+1. Run `go get -u ./...` to update all dependencies.
+2. Run `go mod tidy` to remove unused entries.
+3. Run `go build ./...` and `go test ./...` to verify nothing is broken.
+4. If tests fail, attempt to fix any compilation errors introduced by the update.
+5. Commit the changes with message: `chore(deps): update Go modules (automated maintenance)`
+
+## Notes
+- Do not bump dependencies across major versions without explicit human approval.
+- If a dependency has a known breaking change in its changelog, document it in the PR body.
+- PR body must include: "This PR was created by claude-ops scheduled maintenance (daily-dep-update)"

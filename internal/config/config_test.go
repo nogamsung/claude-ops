@@ -146,6 +146,170 @@ github:
 	}
 }
 
+func TestValidate_MaintenanceTasks_Valid(t *testing.T) {
+	yaml := `
+runtime:
+  tick_interval: "30s"
+scheduler:
+  active_windows:
+    - days: ["mon"]
+      start: "09:00"
+      end: "18:00"
+      tz: "UTC"
+  maintenance_tasks:
+    - name: "daily-dep-update"
+      cron: "0 2 * * *"
+      repo: "owner/repo"
+      prompt_template: "maintenance/dep-update.tmpl"
+      labels: ["chore"]
+      budget_sub_cap:
+        daily: 1
+        weekly: 3
+github:
+  poll_interval: "60s"
+  repos:
+    - name: "owner/repo"
+      default_branch: "main"
+`
+	path := writeTemp(t, yaml)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if err = cfg.Validate(); err != nil {
+		t.Fatalf("Validate() unexpected error: %v", err)
+	}
+	if len(cfg.Scheduler.MaintenanceTasks) != 1 {
+		t.Fatalf("expected 1 maintenance task, got %d", len(cfg.Scheduler.MaintenanceTasks))
+	}
+	mt := cfg.Scheduler.MaintenanceTasks[0]
+	if mt.Name != "daily-dep-update" {
+		t.Errorf("expected name %q, got %q", "daily-dep-update", mt.Name)
+	}
+	if mt.BudgetSubCap.Daily != 1 {
+		t.Errorf("expected daily sub-cap 1, got %d", mt.BudgetSubCap.Daily)
+	}
+	if mt.BudgetSubCap.Weekly != 3 {
+		t.Errorf("expected weekly sub-cap 3, got %d", mt.BudgetSubCap.Weekly)
+	}
+}
+
+func TestValidate_MaintenanceTasks_InvalidCron(t *testing.T) {
+	yaml := `
+runtime:
+  tick_interval: "30s"
+scheduler:
+  active_windows:
+    - days: ["mon"]
+      start: "09:00"
+      end: "18:00"
+      tz: "UTC"
+  maintenance_tasks:
+    - name: "bad-cron"
+      cron: "not-a-cron"
+      repo: "owner/repo"
+      prompt_template: "maintenance/dep-update.tmpl"
+github:
+  poll_interval: "60s"
+  repos:
+    - name: "owner/repo"
+      default_branch: "main"
+`
+	path := writeTemp(t, yaml)
+	cfg, _ := config.Load(path)
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for invalid cron spec")
+	}
+}
+
+func TestValidate_MaintenanceTasks_RepoNotInAllowlist(t *testing.T) {
+	yaml := `
+runtime:
+  tick_interval: "30s"
+scheduler:
+  active_windows:
+    - days: ["mon"]
+      start: "09:00"
+      end: "18:00"
+      tz: "UTC"
+  maintenance_tasks:
+    - name: "orphan-task"
+      cron: "0 2 * * *"
+      repo: "unknown/repo"
+      prompt_template: "maintenance/dep-update.tmpl"
+github:
+  poll_interval: "60s"
+  repos:
+    - name: "owner/repo"
+      default_branch: "main"
+`
+	path := writeTemp(t, yaml)
+	cfg, _ := config.Load(path)
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for repo not in allowlist")
+	}
+}
+
+func TestValidate_MaintenanceTasks_DuplicateName(t *testing.T) {
+	yaml := `
+runtime:
+  tick_interval: "30s"
+scheduler:
+  active_windows:
+    - days: ["mon"]
+      start: "09:00"
+      end: "18:00"
+      tz: "UTC"
+  maintenance_tasks:
+    - name: "same-name"
+      cron: "0 2 * * *"
+      repo: "owner/repo"
+      prompt_template: "maintenance/dep-update.tmpl"
+    - name: "same-name"
+      cron: "0 3 * * *"
+      repo: "owner/repo"
+      prompt_template: "maintenance/dep-update.tmpl"
+github:
+  poll_interval: "60s"
+  repos:
+    - name: "owner/repo"
+      default_branch: "main"
+`
+	path := writeTemp(t, yaml)
+	cfg, _ := config.Load(path)
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for duplicate maintenance task name")
+	}
+}
+
+func TestValidate_MaintenanceTasks_MissingPromptTemplate(t *testing.T) {
+	yaml := `
+runtime:
+  tick_interval: "30s"
+scheduler:
+  active_windows:
+    - days: ["mon"]
+      start: "09:00"
+      end: "18:00"
+      tz: "UTC"
+  maintenance_tasks:
+    - name: "no-template"
+      cron: "0 2 * * *"
+      repo: "owner/repo"
+      prompt_template: ""
+github:
+  poll_interval: "60s"
+  repos:
+    - name: "owner/repo"
+      default_branch: "main"
+`
+	path := writeTemp(t, yaml)
+	cfg, _ := config.Load(path)
+	if err := cfg.Validate(); err == nil {
+		t.Error("expected error for missing prompt_template")
+	}
+}
+
 func TestValidateEnv_MissingToken(t *testing.T) {
 	env := &config.Env{}
 	if err := env.ValidateEnv(); err == nil {

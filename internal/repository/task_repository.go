@@ -19,6 +19,8 @@ type gormTask struct {
 	IssueTitle            string     `gorm:"column:issue_title"`
 	TaskType              string     `gorm:"column:task_type"`
 	Status                string     `gorm:"column:status"`
+	Source                string     `gorm:"column:source"`
+	MaintenanceName       string     `gorm:"column:maintenance_name"`
 	PromptTemplate        string     `gorm:"column:prompt_template"`
 	WorktreePath          string     `gorm:"column:worktree_path"`
 	PRURL                 string     `gorm:"column:pr_url"`
@@ -36,6 +38,10 @@ type gormTask struct {
 func (gormTask) TableName() string { return "tasks" }
 
 func toGORMTask(t *domain.Task) *gormTask {
+	src := string(t.Source)
+	if src == "" {
+		src = string(domain.TaskSourceGitHubIssue)
+	}
 	return &gormTask{
 		ID:                    t.ID,
 		RepoFullName:          t.RepoFullName,
@@ -43,6 +49,8 @@ func toGORMTask(t *domain.Task) *gormTask {
 		IssueTitle:            t.IssueTitle,
 		TaskType:              string(t.TaskType),
 		Status:                string(t.Status),
+		Source:                src,
+		MaintenanceName:       t.MaintenanceName,
 		PromptTemplate:        t.PromptTemplate,
 		WorktreePath:          t.WorktreePath,
 		PRURL:                 t.PRURL,
@@ -59,6 +67,10 @@ func toGORMTask(t *domain.Task) *gormTask {
 }
 
 func toDomainTask(g *gormTask) *domain.Task {
+	src := domain.TaskSource(g.Source)
+	if src == "" {
+		src = domain.TaskSourceGitHubIssue
+	}
 	return &domain.Task{
 		ID:                    g.ID,
 		RepoFullName:          g.RepoFullName,
@@ -66,6 +78,8 @@ func toDomainTask(g *gormTask) *domain.Task {
 		IssueTitle:            g.IssueTitle,
 		TaskType:              domain.TaskType(g.TaskType),
 		Status:                domain.TaskStatus(g.Status),
+		Source:                src,
+		MaintenanceName:       g.MaintenanceName,
 		PromptTemplate:        g.PromptTemplate,
 		WorktreePath:          g.WorktreePath,
 		PRURL:                 g.PRURL,
@@ -130,6 +144,9 @@ func (r *SQLiteTaskRepository) List(ctx context.Context, filter domain.TaskFilte
 
 	if filter.Status != nil {
 		query = query.Where("status = ?", string(*filter.Status))
+	}
+	if filter.Source != nil {
+		query = query.Where("source = ?", string(*filter.Source))
 	}
 	if filter.Cursor != "" {
 		query = query.Where("id < ?", filter.Cursor)

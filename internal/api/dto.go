@@ -17,6 +17,8 @@ type TaskResponse struct {
 	IssueTitle            string     `json:"issue_title" example:"Fix the bug"`
 	TaskType              string     `json:"task_type" example:"feature"`
 	Status                string     `json:"status" example:"queued"`
+	Source                string     `json:"source" example:"github_issue"`
+	MaintenanceName       string     `json:"maintenance_name,omitempty" example:"daily-dep-update"`
 	PRURL                 string     `json:"pr_url,omitempty" example:"https://github.com/owner/repo/pull/10"`
 	PRNumber              int        `json:"pr_number,omitempty" example:"10"`
 	StartedAt             *time.Time `json:"started_at,omitempty"`

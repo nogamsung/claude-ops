@@ -26,7 +26,8 @@ func NewTaskHandler(taskUC *usecase.TaskUseCase) *TaskHandler {
 //	@Tags         tasks
 //	@Produce      json
 //	@Param        status  query     string  false  "Filter by status (queued|running|done|failed|cancelled)"  example("queued")
-//	@Param        limit   query     int     false  "Maximum number of results"  example(50)
+//	@Param        source  query     string  false  "Filter by source (github_issue|maintenance)"              example("maintenance")
+//	@Param        limit   query     int     false  "Maximum number of results"                                example(50)
 //	@Param        cursor  query     string  false  "Pagination cursor"
 //	@Success      200     {object}  TaskListResponse
 //	@Router       /tasks [get]
@@ -36,6 +37,10 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 	if s := c.Query("status"); s != "" {
 		status := domain.TaskStatus(s)
 		filter.Status = &status
+	}
+	if src := c.Query("source"); src != "" {
+		source := domain.TaskSource(src)
+		filter.Source = &source
 	}
 	if l := c.Query("limit"); l != "" {
 		n, err := strconv.Atoi(l)
@@ -151,6 +156,10 @@ func (h *TaskHandler) StopTask(c *gin.Context) {
 }
 
 func toTaskResponse(t *domain.Task) TaskResponse {
+	src := string(t.Source)
+	if src == "" {
+		src = string(domain.TaskSourceGitHubIssue)
+	}
 	return TaskResponse{
 		ID:                    t.ID,
 		RepoFullName:          t.RepoFullName,
@@ -158,6 +167,8 @@ func toTaskResponse(t *domain.Task) TaskResponse {
 		IssueTitle:            t.IssueTitle,
 		TaskType:              string(t.TaskType),
 		Status:                string(t.Status),
+		Source:                src,
+		MaintenanceName:       t.MaintenanceName,
 		PRURL:                 t.PRURL,
 		PRNumber:              t.PRNumber,
 		StartedAt:             t.StartedAt,

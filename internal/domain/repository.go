@@ -5,6 +5,7 @@ import "context"
 // TaskFilter contains optional filters for listing tasks.
 type TaskFilter struct {
 	Status *TaskStatus
+	Source *TaskSource
 	Limit  int
 	Cursor string // opaque cursor (task ID for keyset pagination)
 }
