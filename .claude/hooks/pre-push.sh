@@ -12,6 +12,7 @@
 # 지원 스택 (각 스택의 실행 디렉토리 기준):
 #   kotlin / kotlin-multi → Jacoco (build/reports/jacoco/test/jacocoTestReport.xml)
 #   go / go-multi         → go test -coverprofile=coverage.out ./...
+#   python / python-multi → uv run pytest --cov (coverage.xml)
 #   nextjs / nextjs-multi → Jest --coverage (coverage/coverage-summary.json)
 #   flutter               → flutter test --coverage (coverage/lcov.info)
 
@@ -57,6 +58,7 @@ check_stack_coverage() {
   if [ "$STYPE" = "auto" ]; then
     if [ -f "./gradlew" ]; then STYPE="kotlin"
     elif [ -f "go.mod" ]; then STYPE="go"
+    elif [ -f "pyproject.toml" ] && command -v uv &>/dev/null && grep -q "fastapi" pyproject.toml 2>/dev/null; then STYPE="python"
     elif [ -f "package.json" ] && node -e "require('./package.json').dependencies?.next || require('./package.json').devDependencies?.next || process.exit(1)" 2>/dev/null; then STYPE="nextjs"
     elif [ -f "pubspec.yaml" ] && command -v flutter &>/dev/null; then STYPE="flutter"
     else
@@ -126,6 +128,34 @@ PYEOF
       fi
       COVERAGE=$(go tool cover -func=coverage.out 2>/dev/null | awk '/^total:/ {gsub("%","",$3); print $3}')
       [ -z "$COVERAGE" ] && COVERAGE="0"
+      ;;
+
+    python|python-multi)
+      STACK_LABEL="Python FastAPI"
+      echo "[Pre-push] [$SPATH] 스택: $STACK_LABEL"
+      if ! command -v uv &>/dev/null; then
+        echo "[Pre-push] ⚠️  [$SPATH] uv 명령이 없음 — 건너뜀"
+        popd >/dev/null; return 0
+      fi
+      echo "[Pre-push] uv run pytest --cov --cov-report=xml 실행 중..."
+      if ! uv run pytest --cov --cov-report=xml --cov-report=term 2>&1; then
+        echo "[Pre-push] ❌ [$SPATH] 테스트 실패"
+        popd >/dev/null; return 1
+      fi
+      if [ ! -f coverage.xml ]; then
+        echo "[Pre-push] ⚠️  [$SPATH] coverage.xml 없음 — pytest-cov 설치 확인"
+        popd >/dev/null; return 1
+      fi
+      COVERAGE=$(python3 - <<'PYEOF'
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse("coverage.xml").getroot()
+    rate = root.get("line-rate")
+    print(f"{float(rate) * 100:.1f}" if rate else "0")
+except Exception:
+    print("0")
+PYEOF
+)
       ;;
 
     nextjs|nextjs-multi)

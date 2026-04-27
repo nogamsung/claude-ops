@@ -51,10 +51,18 @@ GitHub Actions 워크플로 설계 에이전트.
 - 독립 job은 `needs` 없이 병렬 실행
 - 조건부 실행은 `if:` 로 불필요한 job 스킵
 
-### 버전·패키지 관리
-- 릴리스 트리거는 반드시 `push: tags: ['v*.*.*']` 기반
-- VERSION 파일 또는 package.json version을 단일 진실 공급원으로 사용
+### 버전·패키지 관리 (Semantic Versioning 정책)
+- 릴리스 트리거는 반드시 `push: tags: ['v*.*.*']` 기반 — `workflow_dispatch` 도 허용 (수동 재발행)
+- VERSION 파일 또는 package.json version 을 단일 진실 공급원으로 사용
 - 동일 워크플로에서 빌드·태깅·배포를 순서 보장 (`needs:` 체인)
+- **GitHub Releases**: 모든 publish 워크플로는 `softprops/action-gh-release@v2` 로 release note 자동 생성 — 직전 태그 대비 커밋 로그 포함, pre-release(`v1.0.0-rc.1`)는 `prerelease: true`
+- **GitHub Packages (GHCR) 태그 정책 — 예외 없음**:
+  - `MAJOR.MINOR.PATCH` 형식만 발행 (예: `1.0.0`, `1.0.0-rc.1`)
+  - **`v1`, `v1.0`, `sha-*`, `dev`, `pr-*` 등 모든 비-semver 태그 발행 금지**
+  - 안정 릴리스(pre-release 가 아닐 때)에는 `latest` 태그 항상 동시 부여
+  - 동일 semver 태그 재push(overwrite) 허용 — 정정 빌드를 위한 의도된 동작
+  - publish 워크플로 끝에 **`cleanup-non-semver` job 필수** — 기존 비-semver 버전을 자동 삭제 (`actions/github-script` + `packages.deletePackageVersion*` API)
+  - 스테이징 이미지가 필요하면 별도 레지스트리 또는 별도 GHCR 패키지명(`{repo}-staging`) 사용 — production 패키지에 비-semver 태그 절대 금지
 
 ### 재사용성
 - 3개 이상 워크플로에서 중복되는 job → reusable workflow 분리
