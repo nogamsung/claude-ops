@@ -1,35 +1,23 @@
 {
   "enabledPlugins": {
     "github@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true,
     "commit-commands@claude-plugins-official": true,
+    "hookify@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
   },
   "permissions": {
     "allow": [
-      "Bash(go build *)",
-      "Bash(go test *)",
-      "Bash(go run *)",
-      "Bash(go mod *)",
-      "Bash(go get *)",
-      "Bash(go vet *)",
-      "Bash(go generate *)",
+      "Bash(go *)",
       "Bash(golangci-lint *)",
       "Bash(migrate *)",
       "Bash(mockery *)",
+      "Bash(swag *)",
+      "Bash(sqlc *)",
       "Bash(git *)",
       "Bash(docker *)",
       "Bash(docker-compose *)",
       "Bash(docker compose *)",
-      "Bash(ls *)",
-      "Bash(find *)",
-      "Bash(grep *)",
-      "Bash(cat *)",
       "Bash(mkdir *)",
       "Bash(cp *)",
       "Bash(mv *)",
@@ -43,26 +31,18 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-start.sh" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "bash .claude/hooks/safety-guard.sh" }] },
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "bash .claude/hooks/pre-push.sh" }] }
+    ],
     "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat); FILE=$(echo \"$INPUT\" | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('file_path',''))\" 2>/dev/null || echo ''); if [[ \"$FILE\" == *.go ]] && command -v gofmt &>/dev/null; then echo \"[Harness] Go 파일 변경 감지 → gofmt 검사 중...\"; gofmt -l \"$FILE\" 2>&1; fi"
-          }
-        ]
-      }
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-lint.sh" }] }
     ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f \"go.mod\" ]; then echo \"[Harness] 작업 완료 → go vet 실행 중...\"; go vet ./... 2>&1 | tail -20; fi"
-          }
-        ]
-      }
+      { "hooks": [{ "type": "command", "command": "if [ -f go.mod ]; then echo \"[Harness] go vet\"; go vet ./... 2>&1 | tail -20; fi" }] }
     ]
   }
 }

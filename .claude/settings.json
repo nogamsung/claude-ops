@@ -31,17 +31,55 @@
   },
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "bash .claude/hooks/session-start.sh" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-start.sh"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "bash .claude/hooks/safety-guard.sh" }] },
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "bash .claude/hooks/pre-push.sh" }] }
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/safety-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-push.sh"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "bash .claude/hooks/post-edit-lint.sh" }] }
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-edit-lint.sh"
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "if [ -f go.mod ]; then echo \"[Harness] go vet\"; go vet ./... 2>&1 | tail -20; fi" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f go.mod ]; then echo \"[Harness] go vet\"; go vet ./... 2>&1 | tail -20; fi"
+          }
+        ]
+      }
     ]
   }
 }

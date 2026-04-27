@@ -542,6 +542,13 @@ jobs:
 ```
 
 ### Docker build & push (GitHub Container Registry)
+
+> **GHCR 태그 정책 (이 스타터 표준)**
+> - `v{MAJOR}.{MINOR}.{PATCH}` 만 발행 — `v1`, `v1.0` 같은 부분 태그 발행 금지
+> - 안정 릴리스(pre-release 아님)에는 `latest` 태그 항상 동시 부여
+> - non-semver 패키지 버전은 cleanup job 으로 항상 정리 (sha 태그 / 임시 태그 / 잘못된 형식 등)
+> - 동일 semver 태그 재발행(overwrite) 허용 — `docker/build-push-action` 은 기본 덮어쓰기
+
 ```yaml
 # .github/workflows/publish.yml
 name: Docker Publish
@@ -549,6 +556,7 @@ name: Docker Publish
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:                # 수동 재발행(overwrite) 허용
 
 permissions:
   contents: read
@@ -560,17 +568,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Docker meta (태그 자동 생성)
+      - name: Docker meta (semver only + latest)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # v1.2.3 → "1.2.3" 단일 + 안정 릴리스만 latest
           tags: |
-            type=semver,pattern={{version}}       # v1.2.3 → 1.2.3
-            type=semver,pattern={{major}}.{{minor}} # v1.2.3 → 1.2
-            type=semver,pattern={{major}}           # v1.2.3 → 1
-            type=sha,prefix=sha-                   # sha-abc1234
-            type=raw,value=latest,enable=${{ github.ref == 'refs/tags/v*' && !contains(github.ref, '-') }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -590,6 +596,63 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 ```
+
+### Non-semver GHCR 버전 정리 (필수)
+
+`docker` job 후속으로 cleanup job 을 실행해 semver 가 아닌 버전(예: `sha-*`, `dev`, `pr-123`, `untagged`)을 삭제합니다.
+
+```yaml
+  cleanup-non-semver:
+    name: Cleanup non-semver GHCR versions
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write           # 패키지 버전 삭제 권한
+    steps:
+      - name: Delete non-semver versions
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const pkg = context.repo.repo;          # repo 이름 = 패키지 이름 가정
+            const isOrg = context.payload.repository.owner.type === 'Organization';
+
+            const list = isOrg
+              ? github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg
+              : github.rest.packages.getAllPackageVersionsForPackageOwnedByUser;
+            const del = isOrg
+              ? github.rest.packages.deletePackageVersionForOrg
+              : github.rest.packages.deletePackageVersionForUser;
+
+            const semver = /^\d+\.\d+\.\d+(-[\w.]+)?$/;   # 1.2.3 또는 1.2.3-rc.1
+            const keep   = (t) => semver.test(t) || t === 'latest';
+
+            const versions = await github.paginate(list, {
+              package_type: 'container',
+              package_name: pkg,
+              ...(isOrg ? { org: owner } : { username: owner }),
+              per_page: 100,
+            });
+
+            for (const v of versions) {
+              const tags = v.metadata?.container?.tags ?? [];
+              # 태그가 0개(untagged) 이거나 모든 태그가 keep 규칙 위반이면 삭제
+              const violates = tags.length === 0 || tags.every(t => !keep(t));
+              if (violates) {
+                core.info(`delete ${v.id} tags=[${tags.join(',')}]`);
+                await del({
+                  package_type: 'container',
+                  package_name: pkg,
+                  package_version_id: v.id,
+                  ...(isOrg ? { org: owner } : { username: owner }),
+                });
+              }
+            }
+```
+
+> **scope 설정**: org 소유 repo 면 `org` API, 개인 소유면 `user` API 가 필요합니다. 위 스크립트는 `repository.owner.type` 으로 자동 분기.
+> **이름이 다를 때**: 패키지 이름이 repo 이름과 다르면 `pkg` 변수를 직접 지정.
 
 ### Gradle / Maven → GitHub Packages
 ```yaml
@@ -918,17 +981,21 @@ module.exports = nextConfig
 
 ### 공통 Docker 배포 워크플로 구조
 ```
-트리거: push tags v*.*.* (릴리스) 또는 push main (스테이징)
+트리거: push tags v*.*.* (릴리스) — 동일 태그 재push 시 overwrite 허용
   └─ build-and-push job
        ├─ docker/metadata-action → 태그 자동 생성
-       │   semver: 1.2.3 / 1.2 / 1 / latest
-       │   sha:    sha-abc1234
+       │   semver: 1.2.3 (단일) + latest (안정 릴리스만)
+       │   ※ v1, v1.0, sha-* 발행 금지
        ├─ docker/setup-buildx-action (멀티플랫폼)
        ├─ docker/login-action → ghcr.io
        └─ docker/build-push-action
            cache-from/to: type=gha  (GitHub Actions 캐시)
            platforms: linux/amd64,linux/arm64
+  └─ cleanup-non-semver job (needs: build-and-push)
+       └─ semver 가 아닌 GHCR 버전 자동 삭제
 ```
+
+> 모든 스택별 워크플로는 위에 명시된 **`cleanup-non-semver` job 을 동일하게 추가**합니다. 스니펫은 [Non-semver GHCR 버전 정리](#non-semver-ghcr-버전-정리-필수) 섹션 그대로 복사.
 
 ### Kotlin Spring Boot — 배포 워크플로
 ```yaml
@@ -955,12 +1022,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # GHCR 태그 정책: semver 단일 + 안정 릴리스만 latest
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -1015,12 +1080,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # GHCR 태그 정책: semver 단일 + 안정 릴리스만 latest
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -1067,12 +1130,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # GHCR 태그 정책: semver 단일 + 안정 릴리스만 latest
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -1095,18 +1156,10 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
 ```
 
-### dev 브랜치 push → 스테이징 이미지 자동 배포 (선택)
-```yaml
-# dev merge 시 :dev 태그로 스테이징 이미지 자동 업데이트
-on:
-  push:
-    branches: [dev]   # dev merge 시 트리거
+### dev 브랜치 push → 스테이징 (별도 레지스트리 권장)
 
-# metadata tags 교체:
-tags: |
-  type=raw,value=dev
-  type=sha,prefix=sha-
-```
+> ⚠️ GHCR 은 semver-only 정책 — `dev`, `sha-*` 같은 태그를 GHCR 에 발행하지 마세요.
+> 스테이징 이미지가 필요하면 **별도 레지스트리**(예: AWS ECR · Docker Hub private) 또는 **별도 GHCR 패키지명**(예: `ghcr.io/{owner}/{repo}-staging`) 으로 분리하세요. 이렇게 해야 위의 cleanup job 이 production GHCR 의 non-semver 버전을 안전하게 삭제할 수 있습니다.
 
 ### 생성된 이미지 확인
 ```bash

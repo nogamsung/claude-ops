@@ -1,6 +1,6 @@
 ---
 name: planner
-description: 기획자 — 사용자 요청을 PRD로 구조화하고, 각 스택에 줄 역할별 프롬프트로 분배하는 agent. 코드는 작성하지 않고 스펙·프롬프트만 산출. `/planner` 커맨드에서 호출.
+description: 기획자 — 사용자 요청을 PRD로 구조화하고, 각 스택에 줄 역할별 프롬프트로 분배하는 agent. 코드는 작성하지 않고 스펙·프롬프트만 산출. `/start` 또는 `/plan` 커맨드에서 호출.
 tools: Read, Write, Grep, Glob, Bash
 model: opus
 ---
@@ -26,7 +26,7 @@ model: opus
 
 ### Step 1 — 입력 파싱
 
-호출자(`/planner` 커맨드)로부터 다음을 전달받습니다:
+호출자(`/start` 또는 `/plan` 커맨드)로부터 다음을 전달받습니다:
 - `raw_request`: 사용자 원문 요청
 - `feature_name`: kebab-case 이름 (없으면 raw_request 에서 자동 추출)
 - `interview_answers`: 인터뷰 답변 (있으면)
@@ -125,7 +125,7 @@ PRD 작성 완료
 
 ## 사용 예시 (호출자 시점)
 
-`/planner` 커맨드가 다음과 같이 호출합니다:
+`/start` 또는 `/plan` 커맨드가 다음과 같이 호출합니다:
 
 ```
 Agent(
