@@ -8,12 +8,12 @@ OUTER_PORT=8787
 INNER_PORT=8787
 IMAGE="ghcr.io/nogamsung/claude-ops:latest"
 
-ENV_FILE="/home/gs97ahn/app/env/claude-ops"
-CONFIG_FILE="/home/gs97ahn/app/claude-ops/config.yaml"
-DATA_DIR="/home/gs97ahn/app/claude-ops/data"
-WORKTREE_DIR="/home/gs97ahn/app/claude-ops/.worktrees"
-PROMPTS_DIR="/home/gs97ahn/app/claude-ops/prompts"
-LOG_DIR="/home/gs97ahn/app/claude-ops/logs"
+ENV_FILE="/home/nogamsung/app/env/claude-ops"
+CONFIG_FILE="/home/nogamsung/app/claude-ops/config.yaml"
+DATA_DIR="/home/nogamsung/app/claude-ops/data"
+WORKTREE_DIR="/home/nogamsung/app/claude-ops/.worktrees"
+PROMPTS_DIR="/home/nogamsung/app/claude-ops/prompts"
+LOG_DIR="/home/nogamsung/app/claude-ops/logs"
 
 # Host 에 이미 'claude login' / 'gh auth login' 이 완료돼 있어야 함 (PRD §9).
 # 컨테이너는 agent 유저로 구동되지만 HOME 은 /root 로 고정되므로 /root 에 마운트.
