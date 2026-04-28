@@ -103,9 +103,10 @@ type SlackConfig struct {
 
 // Env holds sensitive values loaded from environment variables.
 type Env struct {
-	GitHubToken        string
-	SlackBotToken      string
-	SlackSigningSecret string
+	GitHubToken         string
+	GitHubWebhookSecret string
+	SlackBotToken       string
+	SlackSigningSecret  string
 }
 
 // Load reads the YAML config file, loads .env from the working directory (if present),
@@ -157,9 +158,10 @@ func LoadEnv() (*Env, error) {
 	_ = godotenv.Load()
 
 	env := &Env{
-		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
-		SlackBotToken:      os.Getenv("SLACK_BOT_TOKEN"),
-		SlackSigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
+		GitHubToken:         os.Getenv("GITHUB_TOKEN"),
+		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		SlackBotToken:       os.Getenv("SLACK_BOT_TOKEN"),
+		SlackSigningSecret:  os.Getenv("SLACK_SIGNING_SECRET"),
 	}
 	return env, nil
 }

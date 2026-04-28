@@ -222,13 +222,25 @@ func run() error {
 		Enqueuer: maintenanceUC,
 	})
 
+	// GitHub webhook handler — registered only when secret is configured.
+	var webhookH api.GitHubWebhookHandler
+	if env.GitHubWebhookSecret != "" {
+		webhookVerifier := igithub.NewWebhookVerifier(env.GitHubWebhookSecret)
+		dedupCtx, dedupCancel := context.WithCancel(context.Background())
+		defer dedupCancel()
+		dedupCache := igithub.NewMemDedupCache(dedupCtx, 5*time.Minute)
+		webhookH = igithub.NewWebhookHandler(webhookVerifier, dedupCache, taskUC, taskRepo, &cfg.GitHub)
+	} else {
+		slog.Warn("GITHUB_WEBHOOK_SECRET unset — /github/webhook endpoint will not be registered")
+	}
+
 	// HTTP server.
 	healthH := api.NewHealthHandler(modeUC)
 	taskH := api.NewTaskHandler(taskUC)
 	modeH := api.NewModeHandler(modeUC)
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler(env.SlackSigningSecret, sched)
-	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
+	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, webhookH)
 	metrics.NewHandler(metricsRecorder).Register(router)
 
 	srv := &http.Server{

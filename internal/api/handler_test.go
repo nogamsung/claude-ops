@@ -100,6 +100,13 @@ type fakeCanceller struct{}
 
 func (c *fakeCanceller) CancelTask(_ context.Context, _ string) error { return nil }
 
+// fakeWebhookHandler is a no-op webhook handler for tests that don't need webhook logic.
+type fakeWebhookHandler struct{}
+
+func (f *fakeWebhookHandler) HandleWebhook(c *gin.Context) {
+	c.Status(http.StatusNoContent)
+}
+
 func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.Engine {
 	canceller := &fakeCanceller{}
 	taskUC := usecase.NewTaskUseCase(taskRepo, &fakeEventRepo{}, appStateRepo, canceller, nil)
@@ -112,7 +119,7 @@ func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.En
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler("test-secret", canceller)
 
-	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
+	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH, &fakeWebhookHandler{})
 }
 
 func TestHealthEndpoint(t *testing.T) {

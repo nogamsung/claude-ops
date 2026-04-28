@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -211,6 +212,9 @@ func (e *Env) ValidateEnv() error {
 	}
 	if e.SlackSigningSecret == "" {
 		return fmt.Errorf("SLACK_SIGNING_SECRET environment variable is required")
+	}
+	if e.GitHubWebhookSecret == "" {
+		slog.Warn("github webhook disabled: GITHUB_WEBHOOK_SECRET not set — POST /github/webhook will return 503")
 	}
 	return nil
 }
