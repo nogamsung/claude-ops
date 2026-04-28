@@ -100,6 +100,13 @@ type fakeCanceller struct{}
 
 func (c *fakeCanceller) CancelTask(_ context.Context, _ string) error { return nil }
 
+// fakeWebhookHandler is a no-op webhook handler for tests that don't need webhook logic.
+type fakeWebhookHandler struct{}
+
+func (f *fakeWebhookHandler) HandleWebhook(c *gin.Context) {
+	c.Status(http.StatusNoContent)
+}
+
 func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.Engine {
 	canceller := &fakeCanceller{}
 	taskUC := usecase.NewTaskUseCase(taskRepo, &fakeEventRepo{}, appStateRepo, canceller, nil)
@@ -112,7 +119,7 @@ func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.En
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler("test-secret", canceller)
 
-	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH)
+	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH, &fakeWebhookHandler{})
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -303,6 +310,38 @@ func TestSlackInteractionsEndpoint_InvalidSignature(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for invalid signature, got %d", w.Code)
+	}
+}
+
+// TestRouter_WebhookDisabled_404 verifies that when webhookHandler is nil
+// (secret not configured), POST /github/webhook returns 404 — the endpoint is not registered. // ADDED
+func TestRouter_WebhookDisabled_404(t *testing.T) { // ADDED
+	canceller := &fakeCanceller{}
+	taskRepo := &fakeTaskRepo{}
+	appStateRepo := &fakeAppStateRepo{}
+	taskUC := usecase.NewTaskUseCase(taskRepo, &fakeEventRepo{}, appStateRepo, canceller, nil)
+	modeUC := usecase.NewModeUseCase(appStateRepo)
+
+	budgetUC := usecase.NewBudgetUseCase(appStateRepo, scheduler.BudgetLimits{})
+
+	healthH := api.NewHealthHandler(modeUC)
+	taskH := api.NewTaskHandler(taskUC)
+	modeH := api.NewModeHandler(modeUC)
+	limitsH := api.NewLimitsHandler(budgetUC)
+	slackH := api.NewSlackHandler("test-secret", canceller)
+
+	// Pass nil as webhookHandler to simulate secret not configured.
+	r := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/github/webhook", bytes.NewBufferString("{}"))
+	req.Header.Set("X-GitHub-Event", "ping")
+	req.Header.Set("X-GitHub-Delivery", "some-uuid")
+	req.Header.Set("X-Hub-Signature-256", "sha256=irrelevant")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound { // ADDED
+		t.Errorf("expected 404 when webhook is disabled (nil handler), got %d", w.Code) // ADDED
 	}
 }
 

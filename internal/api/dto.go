@@ -112,3 +112,10 @@ type LimitsPatchRequest struct {
 	DailyMax  *int `json:"daily_max,omitempty" example:"5"`
 	WeeklyMax *int `json:"weekly_max,omitempty" example:"35"`
 }
+
+// WebhookResponse is the response for POST /github/webhook.
+type WebhookResponse struct {
+	Accepted bool   `json:"accepted" example:"true"`
+	Reason   string `json:"reason,omitempty" example:"queued"`
+	TaskID   string `json:"task_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
+}

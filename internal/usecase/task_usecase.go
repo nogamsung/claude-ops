@@ -55,6 +55,7 @@ type EnqueueRequest struct {
 	RepoFullName string
 	IssueNumber  int
 	IssueTitle   string
+	Source       string // "webhook" | "polling" | "" (manual)
 }
 
 // TaskDetail is the usecase response for a single task with its recent events.
