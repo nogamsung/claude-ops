@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	igithub "github.com/gs97ahn/scheduled-dev-agent/internal/github"
+	igithub "github.com/gs97ahn/claude-ops/internal/github"
 )
 
 // fakeClock is a Clock implementation whose current time is settable.
@@ -128,6 +128,45 @@ func TestDedupCache_NewMemDedupCache_WithRealClock(t *testing.T) {
 	}
 	if cache.CheckAndAdd("real-clock-delivery") {
 		t.Error("duplicate within TTL should be rejected")
+	}
+}
+
+// TestDedupCache_TTLBoundary_ExactlyOneAccepted verifies that when the TTL has just expired
+// and 100 goroutines simultaneously call CheckAndAdd with the same delivery ID,
+// exactly one goroutine wins the race and gets true.
+func TestDedupCache_TTLBoundary_ExactlyOneAccepted(t *testing.T) { // ADDED
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	clk := newFakeClock(time.Now())
+	cache := igithub.NewMemDedupCacheWithClock(ctx, 5*time.Minute, clk)
+
+	// t=0: register the delivery ID.
+	if !cache.CheckAndAdd("boundary-delivery") {
+		t.Fatal("first call must be accepted")
+	}
+
+	// Advance past TTL so the entry is expired.
+	clk.Advance(5*time.Minute + 1*time.Millisecond)
+
+	// 100 goroutines race to CheckAndAdd the same expired ID — exactly 1 must win.
+	const goroutines = 100
+	var accepted atomic.Int64
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			if cache.CheckAndAdd("boundary-delivery") {
+				accepted.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if accepted.Load() != 1 {
+		t.Errorf("TTL boundary: expected exactly 1 acceptance, got %d", accepted.Load())
 	}
 }
 

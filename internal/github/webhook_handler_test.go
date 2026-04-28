@@ -14,11 +14,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/api"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	igithub "github.com/gs97ahn/scheduled-dev-agent/internal/github"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/api"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	igithub "github.com/gs97ahn/claude-ops/internal/github"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
 func init() {
@@ -142,8 +142,11 @@ func buildIssuePayload(t *testing.T, action, repo string, issueNum int, labels [
 
 // ---------- tests ----------
 
-func TestWebhookHandler_WebhookDisabled_503(t *testing.T) {
-	// empty secret → verifier returns ErrWebhookDisabled
+// TestWebhookHandler_WebhookDisabled_SignatureStillChecked verifies that even without a
+// configured secret the handler itself rejects mismatched signatures (though in production
+// the route is never registered when secret is empty — see api.NewRouter). // MODIFIED
+func TestWebhookHandler_WebhookDisabled_SignatureStillChecked(t *testing.T) { // MODIFIED
+	// empty secret → verifier returns ErrWebhookDisabled (401 for any call)
 	enqueuer := &fakeTaskEnqueuer{}
 	cfg := newGitHubCfg()
 	body := []byte("{}")
@@ -156,8 +159,9 @@ func TestWebhookHandler_WebhookDisabled_503(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503 when secret is empty, got %d", w.Code)
+	// Handler returns 401 because empty-secret verifier always fails. // MODIFIED
+	if w.Code != http.StatusUnauthorized { // MODIFIED
+		t.Errorf("expected 401 when secret is empty, got %d", w.Code) // MODIFIED
 	}
 	if len(enqueuer.calls) != 0 {
 		t.Error("EnqueueFromIssue must not be called when webhook is disabled")

@@ -3,19 +3,17 @@ package github
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
-	"github.com/gs97ahn/scheduled-dev-agent/internal/api"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/config"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/domain"
-	"github.com/gs97ahn/scheduled-dev-agent/internal/usecase"
+	"github.com/gs97ahn/claude-ops/internal/api"
+	"github.com/gs97ahn/claude-ops/internal/config"
+	"github.com/gs97ahn/claude-ops/internal/domain"
+	"github.com/gs97ahn/claude-ops/internal/usecase"
 )
 
 const maxBodyBytes = 1 << 20 // 1 MB
@@ -125,12 +123,9 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	// Step 6: Verify HMAC-SHA256.
+	// Note: ErrWebhookDisabled cannot occur here — the route is only registered when the
+	// secret is configured (see api.NewRouter + cmd/main.go). // MODIFIED
 	if verifyErr := h.verifier.Verify(body, sig); verifyErr != nil {
-		if errors.Is(verifyErr, ErrWebhookDisabled) {
-			// Webhook disabled but endpoint still called — return 503.
-			c.JSON(http.StatusServiceUnavailable, api.ErrorResponse{Error: "github webhook not configured"})
-			return
-		}
 		slog.Warn("webhook: signature verification failed", "delivery", delivery, "event", event)
 		c.JSON(http.StatusUnauthorized, api.ErrorResponse{Error: "signature verification failed"})
 		return
@@ -209,7 +204,7 @@ func (h *WebhookHandler) HandleWebhook(c *gin.Context) {
 	}
 
 	// Step 16: Enqueue task.
-	taskID := uuid.New().String()
+	taskID := "" // MODIFIED: removed dead uuid.New() — task.ID is always set on success
 	task, enqErr := h.taskUC.EnqueueFromIssue(ctx, usecase.EnqueueRequest{
 		RepoFullName: repoFullName,
 		IssueNumber:  issueNumber,

@@ -22,9 +22,10 @@ type realClock struct{}
 
 func (realClock) Now() time.Time { return time.Now() }
 
-// memDedupCache is an in-memory DedupCache backed by sync.Map with TTL eviction.
+// memDedupCache is an in-memory DedupCache backed by a mutex-protected map with TTL eviction. // MODIFIED
 type memDedupCache struct {
-	items sync.Map // map[string]time.Time (expiresAt)
+	mu    sync.Mutex           // MODIFIED: replaced sync.Map with mutex + plain map
+	items map[string]time.Time // MODIFIED: deliveryID → expiresAt
 	ttl   time.Duration
 	clock Clock
 }
@@ -37,32 +38,25 @@ func NewMemDedupCache(ctx context.Context, ttl time.Duration) DedupCache {
 
 // NewMemDedupCacheWithClock creates a MemDedupCache with an injected clock (for testing).
 func NewMemDedupCacheWithClock(ctx context.Context, ttl time.Duration, clk Clock) *memDedupCache {
-	c := &memDedupCache{ttl: ttl, clock: clk}
+	c := &memDedupCache{ttl: ttl, clock: clk, items: make(map[string]time.Time)} // MODIFIED
 	go c.gcLoop(ctx)
 	return c
 }
 
 // CheckAndAdd returns true if deliveryID is new (and records it), false if it is a duplicate.
+// The entire check-and-store is performed under the mutex to eliminate the TOCTOU race
+// that existed with the previous LoadOrStore → TTL check → Store pattern. // MODIFIED
 func (c *memDedupCache) CheckAndAdd(deliveryID string) bool {
+	c.mu.Lock()         // MODIFIED
+	defer c.mu.Unlock() // MODIFIED
 	now := c.clock.Now()
-	expiresAt := now.Add(c.ttl)
-
-	// LoadOrStore is atomic: if key already exists, return the existing value.
-	existing, loaded := c.items.LoadOrStore(deliveryID, expiresAt)
-	if !loaded {
-		// First time seen.
-		return true
+	if exp, ok := c.items[deliveryID]; ok && now.Before(exp) { // MODIFIED
+		// Within TTL — it's a duplicate.
+		return false
 	}
-
-	// Key exists; check whether the existing entry has expired.
-	if exp, ok := existing.(time.Time); ok && now.After(exp) {
-		// Entry is expired — overwrite and accept.
-		c.items.Store(deliveryID, expiresAt)
-		return true
-	}
-
-	// Within TTL — it's a duplicate.
-	return false
+	// First time seen, or TTL has expired — accept and record.
+	c.items[deliveryID] = now.Add(c.ttl) // MODIFIED
+	return true
 }
 
 // gcLoop removes expired entries every 60 seconds until ctx is done.
@@ -80,13 +74,14 @@ func (c *memDedupCache) gcLoop(ctx context.Context) {
 }
 
 func (c *memDedupCache) evictExpired() {
+	c.mu.Lock()         // MODIFIED
+	defer c.mu.Unlock() // MODIFIED
 	now := c.clock.Now()
-	c.items.Range(func(key, value any) bool {
-		if exp, ok := value.(time.Time); ok && now.After(exp) {
-			c.items.Delete(key)
+	for key, exp := range c.items { // MODIFIED
+		if now.After(exp) {
+			delete(c.items, key) // MODIFIED
 		}
-		return true
-	})
+	}
 }
 
 // EvictExpiredForTesting exposes evictExpired for white-box testing of GC behaviour.

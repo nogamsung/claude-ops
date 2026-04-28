@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	igithub "github.com/gs97ahn/scheduled-dev-agent/internal/github"
+	igithub "github.com/gs97ahn/claude-ops/internal/github"
 )
 
 // makeGitHubSignature computes a valid sha256=<hex> signature for the given body and secret.

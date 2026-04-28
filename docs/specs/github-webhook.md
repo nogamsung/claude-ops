@@ -87,6 +87,7 @@
 
 - **서명 헤더 누락 / 검증 실패**: 401 + slog Warn (`signature_verification_failed`). body 무시.
 - **timestamp replay (5분 초과)**: GitHub webhook 은 timestamp 헤더가 없으므로 **delivery_id 캐시** 가 replay 방지 책임. 동일 delivery 5분 이내 재수신 시 200 + ignore.
+  > **OI 결정 (2026-04-27)**: Slack 의 `X-Slack-Request-Timestamp` 와 달리 GitHub 는 공식 timestamp 헤더를 제공하지 않는다. 따라서 "5분 replay window" 는 `webhook_dedup` 의 delivery-ID TTL(기본 5분)로 구현된다. `webhook_verifier.go` 상단 주석에도 동일 내용 기록됨. <!-- OI-resolved: replay window via dedup TTL -->
 - **allowlist 바깥 레포**: 200 + `ignored: not_in_allowlist` 로그. 401 이 아닌 200 으로 응답해야 GitHub 가 재시도하지 않음.
 - **PR 이벤트** (`issue.pull_request != nil`): 200 + ignore.
 - **라벨 미매치** (`labeled` 이벤트지만 필터 라벨이 빠진 경우): 200 + ignore.
@@ -193,6 +194,14 @@ hmac.Equal(expected, request.Header["X-Hub-Signature-256"])
 - **R3 (Med)**: dedup 캐시 누락 (재시작 직후 5분 grace period 끝나기 전 재시작 반복) → 동일 이슈 race. 완화: `ExistsByRepoAndIssue` 가 2차 방어선. v1.1 에서 DB UNIQUE 제약 추가 검토
 - **R4 (Low)**: 서명 검증에서 raw body 가 아닌 파싱된 body 를 검증해 mismatch → Gin 의 `c.Request.Body` 를 `io.ReadAll` 한 후 검증해야 함. 기존 Slack handler 와 동일 패턴
 - **R5 (Low)**: GitHub 이 webhook 을 SHA-1 (`X-Hub-Signature`) 으로도 보낼 수 있음 → v1 은 SHA-256 만 지원, SHA-1 은 무시 (GitHub 가 둘 다 보내므로 안전)
+
+## 11. 설계 결정 기록 (Design Decisions)
+
+| 결정 | 내용 | 일자 |
+|------|------|------|
+| Replay window 구현 방식 | GitHub 공식 timestamp 헤더 부재로 5분 replay window 는 `webhook_dedup` delivery-ID TTL 로 대체. `webhook_verifier.go` 주석 + §6.2 에 명시. | 2026-04-27 |
+| Secret 미설정 시 라우트 미등록 | `GITHUB_WEBHOOK_SECRET` 미설정 시 `/github/webhook` 라우트 자체를 등록하지 않아 엔드포인트 존재 노출 방지 (503 → 404). `api.NewRouter` + `cmd/main.go` 에 반영. | 2026-04-27 |
+| dedup TOCTOU race 제거 | `sync.Map LoadOrStore → TTL check → Store` 패턴을 `sync.Mutex + map[string]time.Time` 으로 교체. `CheckAndAdd` + `evictExpired` 전체를 단일 lock 내에서 수행. | 2026-04-27 |
 
 ## 11. 범위 외 (Out of Scope)
 

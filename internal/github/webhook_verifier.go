@@ -1,3 +1,10 @@
+// Package github provides GitHub webhook verification and delivery deduplication.
+//
+// Replay protection note:
+// GitHub webhook does not provide an official timestamp header
+// (unlike Slack X-Slack-Request-Timestamp). Replay window is
+// implemented at the dedup layer via delivery-ID TTL (default 5min).
+// See docs/specs/github-webhook.md §6.1 for the design decision. // ADDED
 package github
 
 import (

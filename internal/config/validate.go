@@ -214,7 +214,7 @@ func (e *Env) ValidateEnv() error {
 		return fmt.Errorf("SLACK_SIGNING_SECRET environment variable is required")
 	}
 	if e.GitHubWebhookSecret == "" {
-		slog.Warn("github webhook disabled: GITHUB_WEBHOOK_SECRET not set — POST /github/webhook will return 503")
+		slog.Warn("GITHUB_WEBHOOK_SECRET unset — /github/webhook endpoint will not be registered") // MODIFIED
 	}
 	return nil
 }
