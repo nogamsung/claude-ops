@@ -78,8 +78,8 @@ func (uc *UsageUseCase) Aggregate(ctx context.Context, from, to time.Time, bucke
 
 // ByModel returns per-model aggregated usage sorted by cost descending.
 func (uc *UsageUseCase) ByModel(ctx context.Context, from, to time.Time) ([]domain.UsageModelRow, error) {
-	if from.After(to) {
-		return nil, domain.ErrInvalidRange
+	if err := validateDateRange(from, to); err != nil { // MODIFIED: added ErrRangeTooLarge check
+		return nil, err
 	}
 	// The repo uses an exclusive upper bound; add 1 day so "to" (inclusive) is included.
 	toExclusive := to.AddDate(0, 0, 1)
@@ -134,12 +134,20 @@ func (uc *UsageUseCase) Limits(ctx context.Context, now time.Time) (UsageLimitsS
 	return snap, nil
 }
 
+// validateDateRange checks that from <= to and the span does not exceed maxRangeDays. // ADDED
+func validateDateRange(from, to time.Time) error { // ADDED
+	if from.After(to) { // ADDED
+		return domain.ErrInvalidRange // ADDED
+	} // ADDED
+	if to.Sub(from) > maxRangeDays*24*time.Hour { // ADDED
+		return domain.ErrRangeTooLarge // ADDED
+	} // ADDED
+	return nil // ADDED
+} // ADDED
+
 func (uc *UsageUseCase) validateRange(from, to time.Time, bucket domain.BucketKind) error {
-	if from.After(to) {
-		return domain.ErrInvalidRange
-	}
-	if to.Sub(from) > maxRangeDays*24*time.Hour {
-		return domain.ErrRangeTooLarge
+	if err := validateDateRange(from, to); err != nil { // MODIFIED: delegate to validateDateRange
+		return err
 	}
 	switch bucket {
 	case domain.BucketDay, domain.BucketWeek, domain.BucketMonth:

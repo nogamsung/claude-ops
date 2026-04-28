@@ -363,13 +363,17 @@ func (uc *BudgetUseCase) EvaluateCostWarn(ctx context.Context, now time.Time) er
 			if pct >= 100 && !warnState.DailyWarned100 {
 				warnState.DailyWarned100 = true
 				// Always set flag before sending — prevents retry storm on failure (PRD R3).
-				_ = uc.persistCostWarnStateLocked(ctx, warnState, now)
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
 				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "daily", pct, dailyCost, uc.dailyMaxCostUSD); notifyErr != nil {
 					slog.Warn("cost warn: notify daily 100%", "err", notifyErr)
 				}
 			} else if pct >= 80 && !warnState.DailyWarned80 {
 				warnState.DailyWarned80 = true
-				_ = uc.persistCostWarnStateLocked(ctx, warnState, now)
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
 				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "daily", pct, dailyCost, uc.dailyMaxCostUSD); notifyErr != nil {
 					slog.Warn("cost warn: notify daily 80%", "err", notifyErr)
 				}
@@ -388,13 +392,17 @@ func (uc *BudgetUseCase) EvaluateCostWarn(ctx context.Context, now time.Time) er
 
 			if pct >= 100 && !warnState.WeeklyWarned100 {
 				warnState.WeeklyWarned100 = true
-				_ = uc.persistCostWarnStateLocked(ctx, warnState, now)
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
 				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "weekly", pct, weeklyCost, uc.weeklyMaxCostUSD); notifyErr != nil {
 					slog.Warn("cost warn: notify weekly 100%", "err", notifyErr)
 				}
 			} else if pct >= 80 && !warnState.WeeklyWarned80 {
 				warnState.WeeklyWarned80 = true
-				_ = uc.persistCostWarnStateLocked(ctx, warnState, now)
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
 				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "weekly", pct, weeklyCost, uc.weeklyMaxCostUSD); notifyErr != nil {
 					slog.Warn("cost warn: notify weekly 80%", "err", notifyErr)
 				}

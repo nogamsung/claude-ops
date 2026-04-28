@@ -12,10 +12,10 @@ import (
 
 // modelUsageEntry mirrors stream.ModelUsage for JSON unmarshalling.
 type modelUsageEntry struct {
-	InputTokens              int     `json:"inputTokens"`
-	OutputTokens             int     `json:"outputTokens"`
-	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
-	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
+	InputTokens              int64   `json:"inputTokens"`               // MODIFIED: int → int64
+	OutputTokens             int64   `json:"outputTokens"`              // MODIFIED: int → int64
+	CacheReadInputTokens     int64   `json:"cacheReadInputTokens"`      // MODIFIED: int → int64
+	CacheCreationInputTokens int64   `json:"cacheCreationInputTokens"`  // MODIFIED: int → int64
 	CostUSD                  float64 `json:"costUSD"`
 }
 
@@ -133,10 +133,10 @@ func (r *SQLiteUsageRepository) SumByModel(ctx context.Context, from, to time.Ti
 			a := aggregated[key]
 			a.TaskCount++
 			a.CostUSD += usage.CostUSD
-			a.InputTokens += int64(usage.InputTokens)
-			a.OutputTokens += int64(usage.OutputTokens)
-			a.CacheReadTokens += int64(usage.CacheReadInputTokens)
-			a.CacheCreationTokens += int64(usage.CacheCreationInputTokens)
+			a.InputTokens += usage.InputTokens               // MODIFIED: removed int64() cast
+			a.OutputTokens += usage.OutputTokens             // MODIFIED: removed int64() cast
+			a.CacheReadTokens += usage.CacheReadInputTokens  // MODIFIED: removed int64() cast
+			a.CacheCreationTokens += usage.CacheCreationInputTokens // MODIFIED: removed int64() cast
 		}
 	}
 

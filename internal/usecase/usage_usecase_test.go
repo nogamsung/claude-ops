@@ -279,6 +279,17 @@ func TestByModel_InvalidRange(t *testing.T) {
 	repo.AssertNotCalled(t, "SumByModel")
 }
 
+func TestByModel_RangeTooLarge(t *testing.T) { // ADDED
+	repo := &mocks.UsageRepository{}
+	uc := newUseCase(repo)
+	from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC) // > 365 days
+
+	_, err := uc.ByModel(context.Background(), from, to)
+	assert.ErrorIs(t, err, domain.ErrRangeTooLarge)
+	repo.AssertNotCalled(t, "SumByModel")
+}
+
 func TestByModel_RepoError(t *testing.T) {
 	repo := &mocks.UsageRepository{}
 	from := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
