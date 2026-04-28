@@ -64,4 +64,10 @@ type Querier interface {
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)
 	CountTasksByStatus(ctx context.Context) ([]CountTasksByStatusRow, error)
 	ListEventsByTask(ctx context.Context, arg ListEventsByTaskParams) ([]ListEventsByTaskRow, error)
+	SumUsageByDay(ctx context.Context, arg SumUsageByDayParams) ([]SumUsageByDayRow, error)
+	SumUsageByWeek(ctx context.Context, arg SumUsageByWeekParams) ([]SumUsageByDayRow, error)
+	SumUsageByMonth(ctx context.Context, arg SumUsageByMonthParams) ([]SumUsageByDayRow, error)
+	SumUsageByModel(ctx context.Context, arg SumUsageByModelParams) ([]SumUsageByModelRow, error)
+	SumDailyCost(ctx context.Context, dayKey string) (float64, error)
+	SumWeeklyCost(ctx context.Context, weekKey string) (float64, error)
 }

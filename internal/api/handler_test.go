@@ -119,7 +119,7 @@ func setupRouter(taskRepo *fakeTaskRepo, appStateRepo *fakeAppStateRepo) *gin.En
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler("test-secret", canceller)
 
-	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH, &fakeWebhookHandler{})
+	return api.NewRouter(healthH, taskH, modeH, limitsH, slackH, &fakeWebhookHandler{}, nil)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -331,7 +331,7 @@ func TestRouter_WebhookDisabled_404(t *testing.T) { // ADDED
 	slackH := api.NewSlackHandler("test-secret", canceller)
 
 	// Pass nil as webhookHandler to simulate secret not configured.
-	r := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, nil)
+	r := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", bytes.NewBufferString("{}"))
 	req.Header.Set("X-GitHub-Event", "ping")

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -16,6 +18,7 @@ const (
 	appStateKeyTaskCounters   = "task_counters"
 	appStateKeyRateLimitBlock = "rate_limit_block"
 	appStateKeyLimitsOverride = "limits_override"
+	appStateKeyCostWarnState  = "cost_warn_state"
 )
 
 // taskCountersJSON is the persisted shape of BudgetCounters.
@@ -40,6 +43,21 @@ type limitsOverrideJSON struct {
 	WeeklyMax int `json:"weekly_max"`
 }
 
+// costWarnStateJSON is the persisted shape of the cost warning flags.
+type costWarnStateJSON struct {
+	DailyKey          string `json:"daily_key"`
+	DailyWarned80     bool   `json:"daily_warned_80"`
+	DailyWarned100    bool   `json:"daily_warned_100"`
+	WeeklyKey         string `json:"weekly_key"`
+	WeeklyWarned80    bool   `json:"weekly_warned_80"`
+	WeeklyWarned100   bool   `json:"weekly_warned_100"`
+}
+
+// CostWarnNotifier sends Slack messages for cost threshold crossings.
+type CostWarnNotifier interface {
+	NotifyCostWarning(ctx context.Context, scope string, percent float64, current, max float64) error
+}
+
 // BudgetSnapshot is the consolidated budget state returned to API/scheduler callers.
 type BudgetSnapshot struct {
 	Counters scheduler.BudgetCounters
@@ -54,9 +72,13 @@ type BudgetSnapshot struct {
 // race-free at the in-process level. SQLite is the single writer too, so there
 // is no second writer to coordinate with.
 type BudgetUseCase struct {
-	appStateRepo domain.AppStateRepository
-	configLimits scheduler.BudgetLimits
-	mu           sync.Mutex
+	appStateRepo     domain.AppStateRepository
+	configLimits     scheduler.BudgetLimits
+	usageRepo        domain.UsageRepository // optional; nil disables cost warn
+	costWarnNotifier CostWarnNotifier       // optional; nil disables cost warn
+	dailyMaxCostUSD  float64
+	weeklyMaxCostUSD float64
+	mu               sync.Mutex
 }
 
 // NewBudgetUseCase creates a BudgetUseCase using configLimits as the baseline,
@@ -66,6 +88,16 @@ func NewBudgetUseCase(appStateRepo domain.AppStateRepository, configLimits sched
 		appStateRepo: appStateRepo,
 		configLimits: configLimits,
 	}
+}
+
+// WithCostWarn configures optional cost threshold warning support.
+// usageRepo queries cumulative cost; notifier sends Slack messages.
+// dailyMaxUSD and weeklyMaxUSD of 0 disables warnings for that scope.
+func (uc *BudgetUseCase) WithCostWarn(usageRepo domain.UsageRepository, notifier CostWarnNotifier, dailyMaxUSD, weeklyMaxUSD float64) {
+	uc.usageRepo = usageRepo
+	uc.costWarnNotifier = notifier
+	uc.dailyMaxCostUSD = dailyMaxUSD
+	uc.weeklyMaxCostUSD = weeklyMaxUSD
 }
 
 // Snapshot returns the rolled-over counters, effective limits, current block
@@ -280,4 +312,130 @@ func (uc *BudgetUseCase) loadBlockLocked(ctx context.Context) (scheduler.RateLim
 		BlockedUntil:  time.Unix(b.BlockedUntilUnix, 0),
 		RateLimitType: b.RateLimitType,
 	}, nil
+}
+
+// EvaluateCostWarn checks accumulated daily/weekly cost against configured limits
+// and fires Slack warnings when the 80% or 100% thresholds are crossed for the first time
+// in the current bucket. Idempotent — repeated calls in the same bucket never re-send.
+// Satisfies scheduler.CostWarnEvaluator.
+func (uc *BudgetUseCase) EvaluateCostWarn(ctx context.Context, now time.Time) error {
+	if uc.usageRepo == nil || uc.costWarnNotifier == nil {
+		return nil
+	}
+
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
+	limits, err := uc.effectiveLimitsLocked(ctx)
+	if err != nil {
+		return fmt.Errorf("evaluate cost warn: load limits: %w", err)
+	}
+
+	warnState, err := uc.loadCostWarnStateLocked(ctx)
+	if err != nil {
+		return fmt.Errorf("evaluate cost warn: load state: %w", err)
+	}
+
+	dailyKey := scheduler.DateKey(now, limits.ResetTZ)
+	weeklyKey := scheduler.WeekKey(now, limits.ResetTZ, limits.WeekStartsOn)
+
+	// Reset flags when the bucket rolls over.
+	if warnState.DailyKey != dailyKey {
+		warnState.DailyKey = dailyKey
+		warnState.DailyWarned80 = false
+		warnState.DailyWarned100 = false
+	}
+	if warnState.WeeklyKey != weeklyKey {
+		warnState.WeeklyKey = weeklyKey
+		warnState.WeeklyWarned80 = false
+		warnState.WeeklyWarned100 = false
+	}
+
+	// Evaluate daily.
+	if uc.dailyMaxCostUSD > 0 {
+		dailyCost, err := uc.usageRepo.SumDailyCost(ctx, dailyKey)
+		if err != nil {
+			slog.Warn("evaluate cost warn: sum daily cost", "err", err)
+		} else {
+			pct := dailyCost / uc.dailyMaxCostUSD * 100
+			pct = math.Round(pct*10) / 10
+
+			if pct >= 100 && !warnState.DailyWarned100 {
+				warnState.DailyWarned100 = true
+				// Always set flag before sending — prevents retry storm on failure (PRD R3).
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
+				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "daily", pct, dailyCost, uc.dailyMaxCostUSD); notifyErr != nil {
+					slog.Warn("cost warn: notify daily 100%", "err", notifyErr)
+				}
+			} else if pct >= 80 && !warnState.DailyWarned80 {
+				warnState.DailyWarned80 = true
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
+				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "daily", pct, dailyCost, uc.dailyMaxCostUSD); notifyErr != nil {
+					slog.Warn("cost warn: notify daily 80%", "err", notifyErr)
+				}
+			}
+		}
+	}
+
+	// Evaluate weekly.
+	if uc.weeklyMaxCostUSD > 0 {
+		weeklyCost, err := uc.usageRepo.SumWeeklyCost(ctx, weeklyKey)
+		if err != nil {
+			slog.Warn("evaluate cost warn: sum weekly cost", "err", err)
+		} else {
+			pct := weeklyCost / uc.weeklyMaxCostUSD * 100
+			pct = math.Round(pct*10) / 10
+
+			if pct >= 100 && !warnState.WeeklyWarned100 {
+				warnState.WeeklyWarned100 = true
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
+				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "weekly", pct, weeklyCost, uc.weeklyMaxCostUSD); notifyErr != nil {
+					slog.Warn("cost warn: notify weekly 100%", "err", notifyErr)
+				}
+			} else if pct >= 80 && !warnState.WeeklyWarned80 {
+				warnState.WeeklyWarned80 = true
+				if persistErr := uc.persistCostWarnStateLocked(ctx, warnState, now); persistErr != nil { // MODIFIED
+					slog.Warn("cost warn: persist state failed", "err", persistErr)
+				}
+				if notifyErr := uc.costWarnNotifier.NotifyCostWarning(ctx, "weekly", pct, weeklyCost, uc.weeklyMaxCostUSD); notifyErr != nil {
+					slog.Warn("cost warn: notify weekly 80%", "err", notifyErr)
+				}
+			}
+		}
+	}
+
+	return uc.persistCostWarnStateLocked(ctx, warnState, now)
+}
+
+func (uc *BudgetUseCase) loadCostWarnStateLocked(ctx context.Context) (costWarnStateJSON, error) {
+	state, err := uc.appStateRepo.Get(ctx, appStateKeyCostWarnState)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return costWarnStateJSON{}, nil
+		}
+		return costWarnStateJSON{}, err
+	}
+	var s costWarnStateJSON
+	if err := json.Unmarshal([]byte(state.ValueJSON), &s); err != nil {
+		return costWarnStateJSON{}, nil
+	}
+	return s, nil
+}
+
+func (uc *BudgetUseCase) persistCostWarnStateLocked(ctx context.Context, s costWarnStateJSON, now time.Time) error {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return fmt.Errorf("marshal cost warn state: %w", err)
+	}
+	return uc.appStateRepo.Set(ctx, &domain.AppState{
+		Key:       appStateKeyCostWarnState,
+		ValueJSON: string(b),
+		UpdatedAt: now,
+	})
 }

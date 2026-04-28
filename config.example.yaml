@@ -19,6 +19,10 @@ limits:
   week_starts_on: "mon"
   # 일/주 카운터 리셋 기준 타임존
   reset_tz: "Asia/Seoul"
+  # Cost thresholds for Slack warnings. 0 = disabled (no warnings).
+  # When 80% or 100% of the limit is reached, a Slack message is sent once per bucket.
+  daily_max_cost_usd: 0    # e.g. 1.00
+  weekly_max_cost_usd: 0   # e.g. 5.00
 
 scheduler:
   active_windows:

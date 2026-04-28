@@ -69,6 +69,30 @@ func (c *Client) NotifyModeChange(ctx context.Context, enabled bool) error {
 	return c.postMessage(ctx, msg)
 }
 
+// NotifyCostWarning sends a cost threshold warning to Slack.
+// scope is "daily" or "weekly", percent is the usage percentage, current and max are in USD.
+func (c *Client) NotifyCostWarning(ctx context.Context, scope string, percent float64, current, max float64) error {
+	var emoji, level string
+	switch {
+	case percent >= 100:
+		emoji = ":rotating_light:"
+		level = "cap reached"
+	default:
+		emoji = ":warning:"
+		level = fmt.Sprintf("%.0f%% used", percent)
+	}
+	text := fmt.Sprintf("%s %s cost %s ($%.4f / $%.4f)", emoji, scope, level, current, max)
+	msg := Message{
+		Blocks: []Block{
+			{
+				Type: "section",
+				Text: &TextObj{Type: "mrkdwn", Text: text},
+			},
+		},
+	}
+	return c.postMessage(ctx, msg)
+}
+
 func (c *Client) postMessage(ctx context.Context, msg Message) error {
 	type postBody struct {
 		Channel string  `json:"channel"`
