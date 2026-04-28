@@ -22,3 +22,12 @@ var ErrSessionMissing = errors.New("claude session missing: please run 'claude l
 
 // ErrTaskNotCancellable is returned when a task cannot be cancelled in its current state.
 var ErrTaskNotCancellable = errors.New("task cannot be cancelled in its current state")
+
+// ErrInvalidRange is returned when the from date is after the to date.
+var ErrInvalidRange = errors.New("from date must not be after to date")
+
+// ErrRangeTooLarge is returned when the requested date range exceeds 365 days.
+var ErrRangeTooLarge = errors.New("date range must not exceed 365 days")
+
+// ErrInvalidBucket is returned when an unsupported group_by value is provided.
+var ErrInvalidBucket = errors.New("group_by must be one of: day, week, month")

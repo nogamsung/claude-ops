@@ -31,14 +31,16 @@ type RunInput struct {
 
 // RunResult summarises the outcome of a claude CLI invocation.
 type RunResult struct {
-	TextOutput           string
-	InputTokens          int
-	OutputTokens         int
-	CacheReadInputTokens int
-	TotalCostUSD         float64
-	DurationMS           int64
-	ExitCode             int
-	StderrTail           string
+	TextOutput               string
+	InputTokens              int
+	OutputTokens             int
+	CacheReadInputTokens     int
+	CacheCreationInputTokens int
+	TotalCostUSD             float64
+	DurationMS               int64
+	ExitCode                 int
+	StderrTail               string
+	ModelUsage               map[string]stream.ModelUsage // per-model usage from result event
 }
 
 // ExecCommandFunc is a hook for injecting a fake exec.Cmd in tests.
@@ -180,10 +182,14 @@ func (r *Runner) Run(ctx context.Context, input RunInput) (*RunResult, error) {
 		res.InputTokens = usage.InputTokens
 		res.OutputTokens = usage.OutputTokens
 		res.CacheReadInputTokens = usage.CacheReadInputTokens
+		res.CacheCreationInputTokens = usage.CacheCreationInputTokens
 	}
 	if result != nil {
 		res.TotalCostUSD = result.TotalCostUSD
 		res.DurationMS = result.DurationMS
+		if len(result.ModelUsage) > 0 {
+			res.ModelUsage = result.ModelUsage
+		}
 	}
 
 	if exitCode != 0 && waitErr != nil {

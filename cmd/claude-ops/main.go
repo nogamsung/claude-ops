@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/api"
 	"github.com/gs97ahn/claude-ops/internal/claude"
 	"github.com/gs97ahn/claude-ops/internal/config"
@@ -114,6 +115,10 @@ func run() error {
 	eventRepo := repository.NewSQLiteTaskEventRepository(db)
 	appStateRepo := repository.NewSQLiteAppStateRepository(db)
 
+	// sqlc query layer (usage aggregation). Reuses the same *sql.DB from above.
+	sqlcQueries := sqlcdb.New(sqlDB)
+	usageRepo := repository.NewSQLiteUsageRepository(sqlcQueries)
+
 	// Active windows.
 	windows, err := cfg.ActiveWindows()
 	if err != nil {
@@ -153,12 +158,21 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolve limits: %w", err)
 	}
-	budgetUC := usecase.NewBudgetUseCase(appStateRepo, scheduler.BudgetLimits{
+	budgetLimits := scheduler.BudgetLimits{
 		DailyMax:     dailyMax,
 		WeeklyMax:    weeklyMax,
 		WeekStartsOn: weekStart,
 		ResetTZ:      resetTZ,
-	})
+	}
+	budgetUC := usecase.NewBudgetUseCase(appStateRepo, budgetLimits)
+	// Wire cost-warn support when limits are configured.
+	if cfg.Limits.DailyMaxCostUSD > 0 || cfg.Limits.WeeklyMaxCostUSD > 0 {
+		budgetUC.WithCostWarn(usageRepo, slackClient, cfg.Limits.DailyMaxCostUSD, cfg.Limits.WeeklyMaxCostUSD)
+	}
+
+	// Usage use case + handler.
+	usageUC := usecase.NewUsageUseCase(usageRepo, budgetLimits, cfg.Limits.DailyMaxCostUSD, cfg.Limits.WeeklyMaxCostUSD)
+	usageH := api.NewUsageHandler(usageUC)
 
 	// Metrics (Prometheus) — collector reads live from BudgetUseCase + windows.
 	metricsRecorder := metrics.New(metrics.Options{
@@ -181,6 +195,7 @@ func run() error {
 		Slack:        &schedulerSlackAdapter{client: slackClient},
 		PRCreator:    &schedulerPRAdapter{inner: prCreator},
 		Budget:       budgetUC,
+		CostWarn:     budgetUC, // BudgetUseCase implements CostWarnEvaluator via EvaluateCostWarn
 		Metrics:      &schedulerMetricsAdapter{inner: metricsRecorder},
 		QualityGate:  qgAdapter,
 		Windows:      windows,
@@ -240,7 +255,7 @@ func run() error {
 	modeH := api.NewModeHandler(modeUC)
 	limitsH := api.NewLimitsHandler(budgetUC)
 	slackH := api.NewSlackHandler(env.SlackSigningSecret, sched)
-	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, webhookH)
+	router := api.NewRouter(healthH, taskH, modeH, limitsH, slackH, webhookH, usageH)
 	metrics.NewHandler(metricsRecorder).Register(router)
 
 	srv := &http.Server{

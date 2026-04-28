@@ -19,6 +19,12 @@ import (
 	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
+// CostWarnEvaluator evaluates accumulated cost against configured thresholds
+// and fires Slack warnings when 80% / 100% boundaries are crossed.
+type CostWarnEvaluator interface {
+	EvaluateCostWarn(ctx context.Context, now time.Time) error
+}
+
 // SlackNotifier sends task lifecycle notifications to Slack.
 type SlackNotifier interface {
 	NotifyStarted(ctx context.Context, task *domain.Task) error
@@ -69,21 +75,22 @@ type QualityGate interface {
 
 // WorkerConfig holds dependencies for the Worker.
 type WorkerConfig struct {
-	TaskRepo     domain.TaskRepository
-	EventRepo    domain.TaskEventRepository
-	AppStateRepo domain.AppStateRepository
-	Runner       *claude.Runner
-	Canceller    claude.Canceller
-	Slack        SlackNotifier
-	PRCreator    PRCreator
-	Budget       BudgetEnforcer
-	Metrics      MetricsRecorder
-	QualityGate  QualityGate
-	Clock        Clock
-	Windows      []*domain.ActiveWindow
-	WorktreeRoot string
-	PromptsDir   string
-	LogDir       string
+	TaskRepo      domain.TaskRepository
+	EventRepo     domain.TaskEventRepository
+	AppStateRepo  domain.AppStateRepository
+	Runner        *claude.Runner
+	Canceller     claude.Canceller
+	Slack         SlackNotifier
+	PRCreator     PRCreator
+	Budget        BudgetEnforcer
+	CostWarn      CostWarnEvaluator // optional; nil disables cost warn
+	Metrics       MetricsRecorder
+	QualityGate   QualityGate
+	Clock         Clock
+	Windows       []*domain.ActiveWindow
+	WorktreeRoot  string
+	PromptsDir    string
+	LogDir        string
 }
 
 // Worker executes a single task end-to-end.
@@ -221,10 +228,11 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 		return w.fail(ctx, task, fmt.Sprintf("claude: %v\n%s", runErr, stderrTail))
 	}
 
-	// Update token usage.
+	// Update token usage (legacy estimated fields + authoritative cost fields).
 	if result != nil {
 		task.EstimatedInputTokens = result.InputTokens
 		task.EstimatedOutputTokens = result.OutputTokens
+		w.applyRunUsage(task, result)
 	}
 
 	// Quality gate: run repo-configured lint/test commands in the worktree
@@ -270,6 +278,13 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 		slog.Error("worker: mark done", "err", err, "task_id", task.ID)
 	}
 	w.recordFinished(task)
+
+	// Evaluate cost thresholds and fire Slack warn if 80%/100% boundary crossed.
+	if w.cfg.CostWarn != nil {
+		if warnErr := w.cfg.CostWarn.EvaluateCostWarn(ctx, finishedAt); warnErr != nil {
+			slog.Warn("worker: evaluate cost warn", "err", warnErr, "task_id", task.ID)
+		}
+	}
 
 	// Notify Slack done.
 	if w.cfg.Slack != nil {
@@ -436,6 +451,36 @@ func (w *Worker) maybeRecordRateLimit(ctx context.Context, task *domain.Task, ru
 		"resets_at_unix":  rl.ResetsAt,
 		"rate_limit_type": rl.RateLimitType,
 	})
+}
+
+// applyRunUsage applies the authoritative cost and token fields from RunResult to the task.
+// The legacy EstimatedInputTokens/EstimatedOutputTokens fields are set by the caller separately.
+// If result is nil or ModelUsage is empty, the task retains default 0 / "{}" values.
+func (w *Worker) applyRunUsage(task *domain.Task, result *claude.RunResult) {
+	if result == nil {
+		return
+	}
+	task.CostUSD = result.TotalCostUSD
+	task.TotalInputTokens = int64(result.InputTokens)
+	task.TotalOutputTokens = int64(result.OutputTokens)
+	task.CacheReadInputTokens = int64(result.CacheReadInputTokens)
+	task.CacheCreationInputTokens = int64(result.CacheCreationInputTokens)
+
+	if len(result.ModelUsage) == 0 {
+		task.ModelUsageJSON = "{}"
+	} else {
+		b, err := json.Marshal(result.ModelUsage)
+		if err != nil {
+			slog.Warn("worker: marshal model usage", "err", err, "task_id", task.ID)
+			task.ModelUsageJSON = "{}"
+		} else {
+			task.ModelUsageJSON = string(b)
+		}
+	}
+
+	if task.CostUSD == 0 {
+		slog.Info("worker: task done with zero cost", "task_id", task.ID)
+	}
 }
 
 // funcWindowGate adapts a function to the claude.WindowGate interface.

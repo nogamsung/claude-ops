@@ -42,26 +42,33 @@ const (
 
 // Task is the central aggregate of the scheduler system.
 type Task struct {
-	ID                    string
-	RepoFullName          string
-	IssueNumber           int
-	IssueTitle            string
-	TaskType              TaskType
-	Status                TaskStatus
-	Source                TaskSource
-	MaintenanceName       string
-	PromptTemplate        string
-	WorktreePath          string
-	PRURL                 string
-	PRNumber              int
-	StartedAt             *time.Time
-	FinishedAt            *time.Time
-	EstimatedInputTokens  int
-	EstimatedOutputTokens int
-	ExitCode              *int
-	StderrTail            string
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                       string
+	RepoFullName             string
+	IssueNumber              int
+	IssueTitle               string
+	TaskType                 TaskType
+	Status                   TaskStatus
+	Source                   TaskSource
+	MaintenanceName          string
+	PromptTemplate           string
+	WorktreePath             string
+	PRURL                    string
+	PRNumber                 int
+	StartedAt                *time.Time
+	FinishedAt               *time.Time
+	EstimatedInputTokens     int
+	EstimatedOutputTokens    int
+	ExitCode                 *int
+	StderrTail               string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+	// Cost and usage fields populated from the Claude CLI result event.
+	CostUSD                  float64
+	TotalInputTokens         int64
+	TotalOutputTokens        int64
+	CacheCreationInputTokens int64
+	CacheReadInputTokens     int64
+	ModelUsageJSON           string // raw JSON; empty value is "{}"
 }
 
 // EventKind is the type of a task lifecycle event.

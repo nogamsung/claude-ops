@@ -105,6 +105,12 @@ func (c *Config) validateLimits() error {
 		return fmt.Errorf("limits.daily_max_tasks (%d) must be <= weekly_max_tasks (%d)",
 			c.Limits.DailyMaxTasks, c.Limits.WeeklyMaxTasks)
 	}
+	if c.Limits.DailyMaxCostUSD < 0 {
+		return fmt.Errorf("limits.daily_max_cost_usd must be >= 0")
+	}
+	if c.Limits.WeeklyMaxCostUSD < 0 {
+		return fmt.Errorf("limits.weekly_max_cost_usd must be >= 0")
+	}
 	return nil
 }
 

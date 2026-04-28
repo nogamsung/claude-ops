@@ -20,6 +20,7 @@ func NewRouter(
 	limitsHandler *LimitsHandler,
 	slackHandler *SlackHandler,
 	webhookHandler GitHubWebhookHandler,
+	usageHandler *UsageHandler,
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -48,6 +49,13 @@ func NewRouter(
 
 	// Slack
 	r.POST("/slack/interactions", slackHandler.HandleInteractions)
+
+	// Usage dashboard.
+	if usageHandler != nil {
+		r.GET("/usage", usageHandler.GetUsage)
+		r.GET("/usage/by-model", usageHandler.GetUsageByModel)
+		r.GET("/usage/limits", usageHandler.GetUsageLimits)
+	}
 
 	// GitHub webhook — registered only when handler is provided (secret configured).
 	if webhookHandler != nil {

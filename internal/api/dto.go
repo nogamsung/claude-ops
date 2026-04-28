@@ -119,3 +119,78 @@ type WebhookResponse struct {
 	Reason   string `json:"reason,omitempty" example:"queued"`
 	TaskID   string `json:"task_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
+
+// UsageBucketResponse is a single time-bucket in a usage aggregation response.
+type UsageBucketResponse struct {
+	Bucket              string  `json:"bucket" example:"2026-04-27"`
+	TaskCount           int64   `json:"task_count" example:"4"`
+	CostUSD             float64 `json:"cost_usd" example:"1.23"`
+	InputTokens         int64   `json:"input_tokens" example:"12345"`
+	OutputTokens        int64   `json:"output_tokens" example:"6789"`
+	CacheReadTokens     int64   `json:"cache_read_tokens" example:"100"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens" example:"50"`
+	FailedCostUSD       float64 `json:"failed_cost_usd" example:"0.0"`
+}
+
+// UsageTotalsResponse summarises the totals across all returned buckets.
+type UsageTotalsResponse struct {
+	TaskCount           int64   `json:"task_count" example:"80"`
+	CostUSD             float64 `json:"cost_usd" example:"24.50"`
+	InputTokens         int64   `json:"input_tokens" example:"200000"`
+	OutputTokens        int64   `json:"output_tokens" example:"80000"`
+	CacheReadTokens     int64   `json:"cache_read_tokens" example:"5000"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens" example:"2000"`
+	FailedCostUSD       float64 `json:"failed_cost_usd" example:"0.40"`
+}
+
+// UsageResponse is the response for GET /usage.
+type UsageResponse struct {
+	From    string                `json:"from" example:"2026-03-28"`
+	To      string                `json:"to" example:"2026-04-27"`
+	GroupBy string                `json:"group_by" example:"day"`
+	Buckets []UsageBucketResponse `json:"buckets"`
+	Totals  UsageTotalsResponse   `json:"totals"`
+}
+
+// UsageModelItemResponse is a single model in a by-model usage response.
+type UsageModelItemResponse struct {
+	ModelID             string  `json:"model_id" example:"claude-sonnet-4-5"`
+	TaskCount           int64   `json:"task_count" example:"60"`
+	CostUSD             float64 `json:"cost_usd" example:"18.20"`
+	InputTokens         int64   `json:"input_tokens" example:"150000"`
+	OutputTokens        int64   `json:"output_tokens" example:"60000"`
+	CacheReadTokens     int64   `json:"cache_read_tokens" example:"4000"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens" example:"1500"`
+}
+
+// UsageByModelResponse is the response for GET /usage/by-model.
+type UsageByModelResponse struct {
+	From   string                   `json:"from" example:"2026-03-28"`
+	To     string                   `json:"to" example:"2026-04-27"`
+	Models []UsageModelItemResponse `json:"models"`
+}
+
+// UsageLimitsPeriod holds cost usage vs limit for a single period (daily or weekly).
+type UsageLimitsPeriod struct {
+	CountUSD float64  `json:"count_usd" example:"0.85"`
+	MaxUSD   float64  `json:"max_usd" example:"1.00"`
+	Percent  *float64 `json:"percent" example:"85.0"`
+}
+
+// UsageLimitsDailyResponse holds the daily period data.
+type UsageLimitsDailyResponse struct {
+	UsageLimitsPeriod
+	Date string `json:"date" example:"2026-04-27"`
+}
+
+// UsageLimitsWeeklyResponse holds the weekly period data.
+type UsageLimitsWeeklyResponse struct {
+	UsageLimitsPeriod
+	Week string `json:"week" example:"2026-W17"`
+}
+
+// UsageLimitsResponse is the response for GET /usage/limits.
+type UsageLimitsResponse struct {
+	Daily  UsageLimitsDailyResponse  `json:"daily"`
+	Weekly UsageLimitsWeeklyResponse `json:"weekly"`
+}

@@ -13,26 +13,32 @@ import (
 
 // gormTask is the GORM model for the tasks table.
 type gormTask struct {
-	ID                    string     `gorm:"column:id;primaryKey"`
-	RepoFullName          string     `gorm:"column:repo_full_name"`
-	IssueNumber           int        `gorm:"column:issue_number"`
-	IssueTitle            string     `gorm:"column:issue_title"`
-	TaskType              string     `gorm:"column:task_type"`
-	Status                string     `gorm:"column:status"`
-	Source                string     `gorm:"column:source"`
-	MaintenanceName       string     `gorm:"column:maintenance_name"`
-	PromptTemplate        string     `gorm:"column:prompt_template"`
-	WorktreePath          string     `gorm:"column:worktree_path"`
-	PRURL                 string     `gorm:"column:pr_url"`
-	PRNumber              int        `gorm:"column:pr_number"`
-	StartedAt             *time.Time `gorm:"column:started_at"`
-	FinishedAt            *time.Time `gorm:"column:finished_at"`
-	EstimatedInputTokens  int        `gorm:"column:estimated_input_tokens"`
-	EstimatedOutputTokens int        `gorm:"column:estimated_output_tokens"`
-	ExitCode              *int       `gorm:"column:exit_code"`
-	StderrTail            string     `gorm:"column:stderr_tail"`
-	CreatedAt             time.Time  `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt             time.Time  `gorm:"column:updated_at;autoUpdateTime"`
+	ID                       string     `gorm:"column:id;primaryKey"`
+	RepoFullName             string     `gorm:"column:repo_full_name"`
+	IssueNumber              int        `gorm:"column:issue_number"`
+	IssueTitle               string     `gorm:"column:issue_title"`
+	TaskType                 string     `gorm:"column:task_type"`
+	Status                   string     `gorm:"column:status"`
+	Source                   string     `gorm:"column:source"`
+	MaintenanceName          string     `gorm:"column:maintenance_name"`
+	PromptTemplate           string     `gorm:"column:prompt_template"`
+	WorktreePath             string     `gorm:"column:worktree_path"`
+	PRURL                    string     `gorm:"column:pr_url"`
+	PRNumber                 int        `gorm:"column:pr_number"`
+	StartedAt                *time.Time `gorm:"column:started_at"`
+	FinishedAt               *time.Time `gorm:"column:finished_at"`
+	EstimatedInputTokens     int        `gorm:"column:estimated_input_tokens"`
+	EstimatedOutputTokens    int        `gorm:"column:estimated_output_tokens"`
+	ExitCode                 *int       `gorm:"column:exit_code"`
+	StderrTail               string     `gorm:"column:stderr_tail"`
+	CreatedAt                time.Time  `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt                time.Time  `gorm:"column:updated_at;autoUpdateTime"`
+	CostUSD                  float64    `gorm:"column:cost_usd"`
+	TotalInputTokens         int64      `gorm:"column:total_input_tokens"`
+	TotalOutputTokens        int64      `gorm:"column:total_output_tokens"`
+	CacheCreationInputTokens int64      `gorm:"column:cache_creation_input_tokens"`
+	CacheReadInputTokens     int64      `gorm:"column:cache_read_input_tokens"`
+	ModelUsageJSON           string     `gorm:"column:model_usage_json"`
 }
 
 func (gormTask) TableName() string { return "tasks" }
@@ -42,27 +48,37 @@ func toGORMTask(t *domain.Task) *gormTask {
 	if src == "" {
 		src = string(domain.TaskSourceGitHubIssue)
 	}
+	modelJSON := t.ModelUsageJSON
+	if modelJSON == "" {
+		modelJSON = "{}"
+	}
 	return &gormTask{
-		ID:                    t.ID,
-		RepoFullName:          t.RepoFullName,
-		IssueNumber:           t.IssueNumber,
-		IssueTitle:            t.IssueTitle,
-		TaskType:              string(t.TaskType),
-		Status:                string(t.Status),
-		Source:                src,
-		MaintenanceName:       t.MaintenanceName,
-		PromptTemplate:        t.PromptTemplate,
-		WorktreePath:          t.WorktreePath,
-		PRURL:                 t.PRURL,
-		PRNumber:              t.PRNumber,
-		StartedAt:             t.StartedAt,
-		FinishedAt:            t.FinishedAt,
-		EstimatedInputTokens:  t.EstimatedInputTokens,
-		EstimatedOutputTokens: t.EstimatedOutputTokens,
-		ExitCode:              t.ExitCode,
-		StderrTail:            t.StderrTail,
-		CreatedAt:             t.CreatedAt,
-		UpdatedAt:             t.UpdatedAt,
+		ID:                       t.ID,
+		RepoFullName:             t.RepoFullName,
+		IssueNumber:              t.IssueNumber,
+		IssueTitle:               t.IssueTitle,
+		TaskType:                 string(t.TaskType),
+		Status:                   string(t.Status),
+		Source:                   src,
+		MaintenanceName:          t.MaintenanceName,
+		PromptTemplate:           t.PromptTemplate,
+		WorktreePath:             t.WorktreePath,
+		PRURL:                    t.PRURL,
+		PRNumber:                 t.PRNumber,
+		StartedAt:                t.StartedAt,
+		FinishedAt:               t.FinishedAt,
+		EstimatedInputTokens:     t.EstimatedInputTokens,
+		EstimatedOutputTokens:    t.EstimatedOutputTokens,
+		ExitCode:                 t.ExitCode,
+		StderrTail:               t.StderrTail,
+		CreatedAt:                t.CreatedAt,
+		UpdatedAt:                t.UpdatedAt,
+		CostUSD:                  t.CostUSD,
+		TotalInputTokens:         t.TotalInputTokens,
+		TotalOutputTokens:        t.TotalOutputTokens,
+		CacheCreationInputTokens: t.CacheCreationInputTokens,
+		CacheReadInputTokens:     t.CacheReadInputTokens,
+		ModelUsageJSON:           modelJSON,
 	}
 }
 
@@ -71,27 +87,37 @@ func toDomainTask(g *gormTask) *domain.Task {
 	if src == "" {
 		src = domain.TaskSourceGitHubIssue
 	}
+	modelJSON := g.ModelUsageJSON
+	if modelJSON == "" {
+		modelJSON = "{}"
+	}
 	return &domain.Task{
-		ID:                    g.ID,
-		RepoFullName:          g.RepoFullName,
-		IssueNumber:           g.IssueNumber,
-		IssueTitle:            g.IssueTitle,
-		TaskType:              domain.TaskType(g.TaskType),
-		Status:                domain.TaskStatus(g.Status),
-		Source:                src,
-		MaintenanceName:       g.MaintenanceName,
-		PromptTemplate:        g.PromptTemplate,
-		WorktreePath:          g.WorktreePath,
-		PRURL:                 g.PRURL,
-		PRNumber:              g.PRNumber,
-		StartedAt:             g.StartedAt,
-		FinishedAt:            g.FinishedAt,
-		EstimatedInputTokens:  g.EstimatedInputTokens,
-		EstimatedOutputTokens: g.EstimatedOutputTokens,
-		ExitCode:              g.ExitCode,
-		StderrTail:            g.StderrTail,
-		CreatedAt:             g.CreatedAt,
-		UpdatedAt:             g.UpdatedAt,
+		ID:                       g.ID,
+		RepoFullName:             g.RepoFullName,
+		IssueNumber:              g.IssueNumber,
+		IssueTitle:               g.IssueTitle,
+		TaskType:                 domain.TaskType(g.TaskType),
+		Status:                   domain.TaskStatus(g.Status),
+		Source:                   src,
+		MaintenanceName:          g.MaintenanceName,
+		PromptTemplate:           g.PromptTemplate,
+		WorktreePath:             g.WorktreePath,
+		PRURL:                    g.PRURL,
+		PRNumber:                 g.PRNumber,
+		StartedAt:                g.StartedAt,
+		FinishedAt:               g.FinishedAt,
+		EstimatedInputTokens:     g.EstimatedInputTokens,
+		EstimatedOutputTokens:    g.EstimatedOutputTokens,
+		ExitCode:                 g.ExitCode,
+		StderrTail:               g.StderrTail,
+		CreatedAt:                g.CreatedAt,
+		UpdatedAt:                g.UpdatedAt,
+		CostUSD:                  g.CostUSD,
+		TotalInputTokens:         g.TotalInputTokens,
+		TotalOutputTokens:        g.TotalOutputTokens,
+		CacheCreationInputTokens: g.CacheCreationInputTokens,
+		CacheReadInputTokens:     g.CacheReadInputTokens,
+		ModelUsageJSON:           modelJSON,
 	}
 }
 
