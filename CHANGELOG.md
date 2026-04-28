@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/nogamsung/claude-ops/compare/v0.3.0...v0.3.1) (2026-04-28)
+
+
+### Miscellaneous Chores
+
+* **deploy:** switch host path prefix to nogamsung ([#28](https://github.com/nogamsung/claude-ops/issues/28)) ([411270f](https://github.com/nogamsung/claude-ops/commit/411270fa1de73b02afcb0d85b26810444b6539f4))
+
 ## [0.3.0](https://github.com/nogamsung/claude-ops/compare/v0.2.1...v0.3.0) (2026-04-28)
 
 
