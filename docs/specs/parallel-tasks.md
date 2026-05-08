@@ -2,12 +2,29 @@
 
 | 항목 | 값 |
 |------|-----|
-| 작성일 | 2026-04-27 |
-| 상태 | draft |
-| 스택 범위 | Go (단일 바이너리 — `scheduled-dev-agent` 의 scheduler/worker 확장) |
+| 작성일 | 2026-04-27 (구현 머지: 2026-05-08, default `max_parallel_tasks=1` 로 v1 호환 유지) |
+| 상태 | shipped (foundation) — 운영자가 2/3 으로 승격 시 §6.5 spike gate 검증 필요 |
+| 스택 범위 | Go (단일 바이너리 — `claude-ops` 의 scheduler/worker 확장) |
 | 우선순위 | P1 |
 | 작성자 | gs97ahn@gmail.com |
-| 상위 PRD | [`./scheduled-dev-agent.md`](./scheduled-dev-agent.md) §3 비목표 / §10 R3 / §12 OI-2 해소 |
+| 상위 PRD | [`./claude-ops.md`](./claude-ops.md) §3 비목표 / §10 R3 / §12 OI-2 해소 |
+
+---
+
+## 0. 구현 요약 (2026-05-08)
+
+본 PR 은 다음을 도입했다:
+
+- `migrations/000006_add_task_claim_columns` — `tasks.worker_id`, `tasks.claimed_at`, `idx_tasks_pickup(status, created_at)`.
+- `db/query/task.sql` — `ClaimNextTask` (UPDATE … WHERE id = (SELECT id FROM (… FOR UPDATE SKIP LOCKED) AS picked) + NOT EXISTS 로 같은 레포 직렬화), `GetClaimedTaskID`, `ReclaimStaleTasks`.
+- `domain.TaskRepository.{ClaimNext, ReclaimStale}` + Gorm 구현체.
+- `internal/scheduler/scheduler.go` 의 `sem` 버퍼를 1 → `cfg.MaxParallelTasks` 로 확장. `tick` 이 빈 슬롯을 모두 채우도록 loop. `dispatch` 가 `taskRepo.List` → `taskRepo.ClaimNext(workerID)` 로 변경 — 같은 레포 직렬화는 SQL 레이어에서 enforced (application mutex 불필요).
+- `internal/scheduler/reclaimer.go` (신규) — `cfg.ReclaimInterval` (10m default) 마다 `ReclaimStale(now - LeaseTimeout)` 호출. lease 60m default.
+- `internal/metrics` — `claude_ops_parallel_slots_in_use` / `_max` gauge 추가. `metricsRecorder.SetParallelSlots(sched)` 로 setter 주입.
+- `cmd/claude-ops/main.go` — `workerID = "<hostname>-<pid>"` 생성, scheduler/reclaimer 와이어링.
+- `internal/config` — `ConcurrencyConfig{MaxParallelTasks, LeaseTimeout, ReclaimInterval}` (default 1/60m/10m, validate cap 10).
+
+**default `max_parallel_tasks=1` 으로 v1 동작과 바이트 동일**. 운영자가 2/3 으로 승격 시 §6.5 spike acceptance gate 통과 필요. 단일 인스턴스 가정 — 멀티 인스턴스로 확장 시 workerID 를 안정적인 per-instance 값으로 바꿔야 함.
 
 ---
 

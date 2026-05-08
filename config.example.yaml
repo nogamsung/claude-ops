@@ -18,6 +18,18 @@ runtime:
   # Runs on boot and every 24h. 0 disables GC.
   worktree_retention_days: 7
 
+concurrency:
+  # Number of worker slots that may run claude tasks in parallel. The default
+  # is 1 (= v1 byte-for-byte behavior). Raise to 2 or 3 only after the spike
+  # acceptance gates in docs/specs/parallel-tasks.md §6.5. Capped at 10.
+  max_parallel_tasks: 1
+  # How long a claimed task may look alive before the periodic safety net
+  # marks it orphaned (for the case where the worker crashed without updating
+  # status). Should comfortably exceed the longest realistic task length.
+  lease_timeout: "60m"
+  # Cadence of the orphan reclaimer. Must be < lease_timeout.
+  reclaim_interval: "10m"
+
 limits:
   # Daily 上限. 0 이면 weekly_max_tasks 에서 자동 유도 (ceil(weekly/7)).
   # 둘 다 0 이면 무제한.

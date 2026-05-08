@@ -19,6 +19,8 @@ type dynamicCollector struct {
 	tasksRemaining                 *prometheus.Desc
 	rateLimitBlockSecondsRemaining *prometheus.Desc
 	activeWindowOpen               *prometheus.Desc
+	parallelSlotsInUse             *prometheus.Desc
+	parallelSlotsMax               *prometheus.Desc
 }
 
 func newDynamicCollector(m *Metrics) *dynamicCollector {
@@ -39,6 +41,16 @@ func newDynamicCollector(m *Metrics) *dynamicCollector {
 			"1 if the scheduler would dispatch a task at scrape time (in-window or full-mode), else 0.",
 			nil, nil,
 		),
+		parallelSlotsInUse: prometheus.NewDesc(
+			"claude_ops_parallel_slots_in_use",
+			"Number of worker-pool slots currently running a claude task.",
+			nil, nil,
+		),
+		parallelSlotsMax: prometheus.NewDesc(
+			"claude_ops_parallel_slots_max",
+			"Configured worker-pool capacity (concurrency.max_parallel_tasks).",
+			nil, nil,
+		),
 	}
 }
 
@@ -47,6 +59,8 @@ func (c *dynamicCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.tasksRemaining
 	ch <- c.rateLimitBlockSecondsRemaining
 	ch <- c.activeWindowOpen
+	ch <- c.parallelSlotsInUse
+	ch <- c.parallelSlotsMax
 }
 
 // Collect reads live state from the injected sources. Failures log and skip
@@ -88,6 +102,13 @@ func (c *dynamicCollector) Collect(ch chan<- prometheus.Metric) {
 			open = 1.0
 		}
 		ch <- prometheus.MustNewConstMetric(c.activeWindowOpen, prometheus.GaugeValue, open)
+	}
+
+	if c.m.parallelSlots != nil {
+		ch <- prometheus.MustNewConstMetric(c.parallelSlotsInUse, prometheus.GaugeValue,
+			float64(c.m.parallelSlots.SlotsInUse()))
+		ch <- prometheus.MustNewConstMetric(c.parallelSlotsMax, prometheus.GaugeValue,
+			float64(c.m.parallelSlots.MaxSlots()))
 	}
 }
 

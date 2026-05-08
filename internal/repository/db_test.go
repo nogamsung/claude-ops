@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	sqlcdb "github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/domain"
 	"github.com/gs97ahn/claude-ops/internal/repository"
 	"github.com/gs97ahn/claude-ops/testutil"
@@ -17,7 +18,12 @@ import (
 func setupDB(t *testing.T) (*repository.GormTaskRepository, *repository.GormTaskEventRepository, *repository.GormAppStateRepository) {
 	t.Helper()
 	db := testutil.NewTestDB(t)
-	return repository.NewGormTaskRepository(db),
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get sql.DB: %v", err)
+	}
+	queries := sqlcdb.New(sqlDB)
+	return repository.NewGormTaskRepository(db, queries),
 		repository.NewGormTaskEventRepository(db),
 		repository.NewGormAppStateRepository(db)
 }

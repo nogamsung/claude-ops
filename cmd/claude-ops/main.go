@@ -118,13 +118,14 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
+	// sqlc query layer (usage aggregation + ClaimNext/ReclaimStale).
+	// Constructed first because TaskRepository now depends on it.
+	sqlcQueries := sqlcdb.New(sqlDB)
+
 	// Repositories.
-	taskRepo := repository.NewGormTaskRepository(db)
+	taskRepo := repository.NewGormTaskRepository(db, sqlcQueries)
 	eventRepo := repository.NewGormTaskEventRepository(db)
 	appStateRepo := repository.NewGormAppStateRepository(db)
-
-	// sqlc query layer (usage aggregation). Reuses the same *sql.DB from above.
-	sqlcQueries := sqlcdb.New(sqlDB)
 	usageRepo := repository.NewGormUsageRepository(sqlcQueries)
 
 	// Active windows.
@@ -213,16 +214,37 @@ func run() error {
 	}
 	worker := scheduler.NewWorker(workerCfg)
 
-	// Scheduler.
+	// Scheduler — workerID identifies this instance for ClaimNext attribution
+	// and lease reclaim. Single-instance v1.1 uses host-pid; multi-instance
+	// deployments need a stable per-instance value (out of scope for now).
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	workerID := fmt.Sprintf("%s-%d", hostname, os.Getpid())
+
 	sched := scheduler.New(scheduler.Config{
-		Windows:      windows,
-		TaskRepo:     taskRepo,
-		AppStateRepo: appStateRepo,
-		Poller:       poller,
-		Worker:       worker,
-		BudgetGate:   budgetUC,
-		TickInterval: cfg.Runtime.TickInterval,
+		Windows:          windows,
+		TaskRepo:         taskRepo,
+		AppStateRepo:     appStateRepo,
+		Poller:           poller,
+		Worker:           worker,
+		BudgetGate:       budgetUC,
+		TickInterval:     cfg.Runtime.TickInterval,
+		WorkerID:         workerID,
+		MaxParallelTasks: cfg.Concurrency.MaxParallelTasks,
 	})
+	// Now that the scheduler exists, wire its slot gauges into the metrics
+	// collector. The Metrics recorder had to be built earlier (Worker needs
+	// it) — SetParallelSlots completes the loop without a circular dep.
+	metricsRecorder.SetParallelSlots(sched)
+
+	// Lease reclaimer — periodic safety net for tasks whose worker died
+	// without clearing the claim. Started below alongside Scheduler.Start.
+	reclaimer := scheduler.NewReclaimer(
+		taskRepo, sharedClock,
+		cfg.Concurrency.ReclaimInterval, cfg.Concurrency.LeaseTimeout,
+	)
 
 	// WindowGate adapter for TaskUseCase (C1 fix: inject window gate so EnqueueFromIssue checks correctly).
 	ucWindowGate := &windowsGateAdapter{windows: windows} // ADDED
@@ -279,6 +301,7 @@ func run() error {
 	go sched.Start(schedCtx)
 	go maintenanceSched.Start(schedCtx)
 	go gcRunner.Start(schedCtx)
+	go reclaimer.Start(schedCtx)
 
 	go func() {
 		slog.Info("HTTP server listening", "addr", cfg.Runtime.HTTPBindAddr)

@@ -66,6 +66,12 @@ func (r *fakeTaskRepo) GetRunning(_ context.Context) ([]*domain.Task, error) { r
 func (r *fakeTaskRepo) ExistsByRepoAndIssue(_ context.Context, _ string, _ int) (bool, error) {
 	return r.exists, nil
 }
+func (r *fakeTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 type fakeEventRepo struct{}
 
