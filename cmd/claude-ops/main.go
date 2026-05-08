@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -405,8 +406,15 @@ func (a *metricsFullModeAdapter) IsFullMode(ctx context.Context) bool {
 	if err != nil || state == nil {
 		return false
 	}
-	v := state.ValueJSON
-	return v == "true" || v == "1" || v == `{"enabled":true}`
+	// MySQL JSON columns normalize whitespace on read, so raw string
+	// comparison is unreliable — unmarshal and inspect the field.
+	var fs struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal([]byte(state.ValueJSON), &fs); err != nil {
+		return false
+	}
+	return fs.Enabled
 }
 
 // metricsClockAdapter lets the metrics package observe the same clock the

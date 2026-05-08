@@ -2,6 +2,8 @@ package repository_test
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -190,7 +192,9 @@ func TestAppStateRepository_SetAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.ValueJSON != `{"enabled":true}` {
+	// MySQL JSON columns canonicalize whitespace on read, so compare
+	// semantically rather than byte-for-byte.
+	if !jsonEqual(t, got.ValueJSON, `{"enabled":true}`) {
 		t.Errorf("unexpected value: %s", got.ValueJSON)
 	}
 }
@@ -218,7 +222,22 @@ func TestAppStateRepository_Upsert(t *testing.T) {
 	}
 
 	got, _ := appStateRepo.Get(context.Background(), "full_mode")
-	if got.ValueJSON != `{"enabled":true}` {
+	if !jsonEqual(t, got.ValueJSON, `{"enabled":true}`) {
 		t.Errorf("expected upserted value, got %s", got.ValueJSON)
 	}
+}
+
+// jsonEqual reports whether two JSON strings are semantically equal
+// (whitespace-insensitive). Needed because MySQL JSON columns reformat
+// the stored bytes on read.
+func jsonEqual(t *testing.T, a, b string) bool {
+	t.Helper()
+	var av, bv any
+	if err := json.Unmarshal([]byte(a), &av); err != nil {
+		t.Fatalf("jsonEqual: bad lhs %q: %v", a, err)
+	}
+	if err := json.Unmarshal([]byte(b), &bv); err != nil {
+		t.Fatalf("jsonEqual: bad rhs %q: %v", b, err)
+	}
+	return reflect.DeepEqual(av, bv)
 }
