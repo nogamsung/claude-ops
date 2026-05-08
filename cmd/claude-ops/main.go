@@ -303,6 +303,7 @@ func run() error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	schedCtx, schedCancel := context.WithCancel(context.Background())
+	defer schedCancel() // safety net — Stop path below also calls this explicitly
 	go sched.Start(schedCtx)
 	go maintenanceSched.Start(schedCtx)
 	go gcRunner.Start(schedCtx)

@@ -4,14 +4,17 @@
 -- which is already used by Reclaimer but was missing from the original
 -- enum and would have errored on production INSERT).
 
+-- Step 1: columns + CHECK constraint updates. Self-ref FK is added in
+-- step 2 because MySQL InnoDB occasionally returns Error 1215 ("Cannot
+-- add foreign key constraint") when a self-referential FK is introduced
+-- in the same ALTER as the column it references — splitting into two
+-- ALTERs lets the engine commit the column metadata first.
 ALTER TABLE tasks
     ADD COLUMN parent_task_id     CHAR(36)    NULL,
     ADD COLUMN fix_attempt_count  INT         NOT NULL DEFAULT 0,
     ADD COLUMN ci_status          VARCHAR(16) NOT NULL DEFAULT '',
     ADD COLUMN head_sha           VARCHAR(40) NOT NULL DEFAULT '',
     ADD COLUMN ci_last_polled_at  DATETIME(3) NULL,
-    ADD CONSTRAINT fk_tasks_parent
-        FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
     DROP CONSTRAINT chk_tasks_task_type,
     ADD CONSTRAINT chk_tasks_task_type
         CHECK (task_type IN ('feature', 'security', 'perf', 'ci-fix')),
@@ -22,9 +25,14 @@ ALTER TABLE tasks
         CHECK (ci_status IN ('', 'pending', 'watching', 'passed', 'failed',
                              'exhausted', 'timeout', 'stuck', 'closed'));
 
--- Dedup index for fix tasks: at most one ci-fix task per (parent, head_sha).
--- MySQL has no partial-index syntax, so we use a STORED generated column
--- that is NULL for non-ci-fix rows (NULLs do not collide in UNIQUE indexes).
+-- Step 2: self-ref FK now that parent_task_id exists.
+ALTER TABLE tasks
+    ADD CONSTRAINT fk_tasks_parent
+        FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE SET NULL;
+
+-- Step 3: dedup key for fix tasks. STORED generated column whose value
+-- is NULL for non-ci-fix rows (NULLs do not collide in UNIQUE indexes),
+-- emulating partial-index semantics that MySQL lacks.
 ALTER TABLE tasks
     ADD COLUMN ci_fix_dedup_key VARCHAR(83) GENERATED ALWAYS AS (
         CASE WHEN task_type = 'ci-fix'
