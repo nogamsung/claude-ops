@@ -13,7 +13,7 @@
 
 ## 1. 배경
 
-`scheduled-dev-agent` v1 은 §3 에서 "복수 Claude 세션 병렬 실행" 을 명시적으로 비목표로 두고, 세마포어 1개 (`scheduler.sem = make(chan struct{}, 1)`) 로 worker 를 직렬화해 동작한다. 이 제약은 ① Claude Code CLI 가 같은 머신·같은 로그인 세션 디렉토리(`~/.claude/`) 에 동시에 여러 프로세스가 쓸 때의 충돌 가능성, ② `git worktree` 가 같은 base branch 에서 동시 push 될 때의 충돌, ③ SQLite WAL 모드의 단일 writer 보장이라는 세 가지 위험 때문이었다.
+`scheduled-dev-agent` v1 은 §3 에서 "복수 Claude 세션 병렬 실행" 을 명시적으로 비목표로 두고, 세마포어 1개 (`scheduler.sem = make(chan struct{}, 1)`) 로 worker 를 직렬화해 동작한다. 이 제약은 ① Claude Code CLI 가 같은 머신·같은 로그인 세션 디렉토리(`~/.claude/`) 에 동시에 여러 프로세스가 쓸 때의 충돌 가능성, ② `git worktree` 가 같은 base branch 에서 동시 push 될 때의 충돌이라는 두 가지 위험 때문이다. (이전 draft 에 있던 "③ SQLite WAL 단일 writer" 제약은 v1.1 의 MySQL 전환으로 해소되었다 — InnoDB 의 row-level lock + `SELECT ... FOR UPDATE SKIP LOCKED` 로 worker pickup 을 atomic 하게 처리할 수 있다.)
 
 §12 OI-2 는 v1.1 에서 2~3 병렬을 검토하기로 보류된 항목이다. 현재 운영 데이터로는 직렬 1개 처리 시 일일 5건 cap 까지 도달하는 task 의 총 처리 시간이 단순 합계라, 활성 시간대 (예: 09:00–18:00, 9 시간) 안에 5건이 평균 task 길이 (~30분) × 5 = 2.5h 로 시간 자원이 남는다. 그러나 task 가 길어지거나 (CI fix loop 동반 시) cap 이 7~10 으로 올라가면 활성 시간대를 모두 소진하고도 대기열이 남는 시나리오가 임박했다.
 
@@ -23,7 +23,7 @@
 - **Anthropic API key 금지** (상위 PRD 와 동일) — `claude` CLI 의 동시 실행 가능 여부는 **실측 spike 단계에서 검증**
 - **활성 시간 / budget gate / rate-limit block** 은 모든 병렬 슬롯에 동일하게 enforced
 - **같은 레포 동시 처리 금지** — v1.1 은 in-memory `sync.Map[repo]*sync.Mutex` 로 차단 (다른 레포끼리만 병렬)
-- **SQLite 단일 writer** — `sql.DB.SetMaxOpenConns(1)` 는 그대로 유지. dispatch 의 task pickup 은 row-level locking 패턴으로 race 방지
+- **MySQL InnoDB row-level lock** — task pickup 은 `SELECT ... FOR UPDATE SKIP LOCKED` 패턴으로 race-free dispatch. 풀 크기는 v1.1 기준 `MaxOpenConns=25` (NewDB 기본) — 단일 writer 강제는 더 이상 필요 없음
 - **Worker pool 패턴** — `errgroup.SetLimit(N)` 또는 N 워커 채널 패턴 (구현은 §6.4 참조)
 
 ## 2. 목표 (Goals)

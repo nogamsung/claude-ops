@@ -5,16 +5,18 @@ OPSCTL_DIR     := cmd/claude-opsctl
 BIN_DIR        := bin
 COVERAGE_FILE  := coverage.out
 MIGRATIONS_DIR := migrations
-DB_PATH        ?= data/agent.db
+# MYSQL_DSN must include parseTime=true&charset=utf8mb4. Override on the
+# command line: make migrate-up MYSQL_DSN='user:pass@tcp(host)/db?...'.
+MYSQL_DSN      ?= claude_ops:claude_ops@tcp(127.0.0.1:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC
 CONFIG_PATH    ?= config.example.yaml
 
 .PHONY: build run test cover lint swag sqlc migrate-up migrate-down docker clean help \
         opsctl-build opsctl-release
 
-## build: compile single binary
+## build: compile single binary (pure-Go, no CGO required for MySQL driver)
 build:
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=1 go build -ldflags="-s -w" -o $(BIN_DIR)/$(BINARY_NAME) ./$(CMD_DIR)/...
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o $(BIN_DIR)/$(BINARY_NAME) ./$(CMD_DIR)/...
 
 ## run: run the agent with example config
 run: build
@@ -22,11 +24,11 @@ run: build
 
 ## test: run all tests with race detector
 test:
-	CGO_ENABLED=1 go test -race -count=1 ./...
+	go test -race -count=1 ./...
 
 ## cover: run tests and show coverage
 cover:
-	CGO_ENABLED=1 go test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
+	go test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
 	go tool cover -func=$(COVERAGE_FILE) | tail -5
 
 ## cover-html: open coverage in browser
@@ -45,13 +47,13 @@ swag:
 sqlc:
 	sqlc generate
 
-## migrate-up: run all pending migrations
+## migrate-up: run all pending migrations against MYSQL_DSN
 migrate-up:
-	migrate -source file://$(MIGRATIONS_DIR) -database "sqlite3://$(DB_PATH)" up
+	migrate -source file://$(MIGRATIONS_DIR) -database "mysql://$(MYSQL_DSN)" up
 
 ## migrate-down: rollback last migration
 migrate-down:
-	migrate -source file://$(MIGRATIONS_DIR) -database "sqlite3://$(DB_PATH)" down 1
+	migrate -source file://$(MIGRATIONS_DIR) -database "mysql://$(MYSQL_DSN)" down 1
 
 ## docker: build docker image
 docker:

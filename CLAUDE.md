@@ -1,7 +1,7 @@
-# scheduled-dev-agent — Go Gin
+# claude-ops — Go Gin
 
 ## Stack
-Go · Gin · GORM(단순 CRUD) + **sqlc**(동적·복잡 쿼리) · golang-migrate · **golangci-lint** · **swaggo/swag** · testify + mockery
+Go · Gin · GORM(단순 CRUD) + **sqlc**(동적·복잡 쿼리) · **MySQL 8.0** · golang-migrate · **golangci-lint** · **swaggo/swag** · testify + mockery + **testcontainers-go/mysql**
 
 ## Agents & Commands
 | 목적 | Agent / Command |

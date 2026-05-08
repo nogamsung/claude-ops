@@ -25,7 +25,7 @@
 - G3. 작업 시작/종료/실패/중단 이벤트가 **10초 이내** Slack 채널로 전달
 - G4. Slack Stop 버튼 또는 HTTP API 로 실행 중 task 를 **5초 이내** SIGTERM, 30초 내 SIGKILL 보장
 - G5. Full usage 모드 토글 시 활성 시간대 무시하고 **Claude Code usage 한도 신호 감지까지** 연속 실행
-- G6. 단일 Go 바이너리 + systemd unit / Dockerfile 로 배포 (외부 DB·큐 의존성 없음 — SQLite)
+- G6. 단일 Go 바이너리 + systemd unit / docker-compose 로 배포 (DB 는 MySQL 8.0 — compose 가 sibling 서비스로 동봉, 외부 큐 의존성 없음)
 - G7. **Budget gate** (일일/주간 task 카운트 캡 + CLI rate-limit 신호 기반 자동 throttle) 가 항상 enforced — full mode 도 우회 불가. 기본값 daily=5, weekly=daily*7. 운영자가 HTTP API 로 런타임 조절 가능
 
 ## 3. 비목표 (Non-goals)
@@ -102,7 +102,7 @@
 
 ```
 1. POST /modes/full {enabled: true}
-2. mode 상태 SQLite 에 persist
+2. mode 상태 MySQL `app_states` 에 persist
 3. scheduler 가 active window 게이트 bypass
    ⚠ budget gate (daily/weekly cap + rate_limit_block) 는 그대로 enforced
 4. 이슈 소진 후에도 idle poll 지속 (30s → 10s 간격 축소)
@@ -112,7 +112,7 @@
 
 ## 7. 데이터 모델 (요약)
 
-SQLite 단일 파일 (`data/agent.db`). golang-migrate 로 마이그레이션 관리. GORM 은 단순 CRUD, 검색·집계는 sqlc.
+**MySQL 8.0** (DSN 기반, docker-compose 가 sibling 서비스로 동봉). golang-migrate 로 마이그레이션 관리. GORM 은 단순 CRUD, 동적·집계 쿼리는 sqlc 의 mysql engine 으로 생성.
 
 ```
 Task (id, repo_full_name, issue_number, issue_title, task_type, status,
@@ -175,7 +175,7 @@ Slack Block Kit 메시지 스키마 예시:
 
 | 항목 | 요구 |
 |------|------|
-| 배포 | 단일 Go 바이너리 + systemd unit / Dockerfile. 외부 DB / 큐 의존성 없음 |
+| 배포 | 단일 Go 바이너리 + systemd unit / docker-compose. DB 는 MySQL 8.0 (compose sibling 또는 외부 인스턴스). 큐 의존성 없음 |
 | 보안 | GitHub PAT · Slack bot token · signing secret 은 환경변수만 (config.yaml 금지). `~/.claude` 세션 디렉토리 파일 권한 0700 확인 |
 | 활성 시간 게이트 | **scheduler 레이어에서 enforced**. Claude invoke 직전 `clock.Now()` 재검사 (double-gate) |
 | 관측성 | slog JSON 로그 → stdout (systemd-journald). task 별 stdout 은 `data/logs/{task_id}.log` |
@@ -200,7 +200,7 @@ Slack Block Kit 메시지 스키마 예시:
 - **R2 (Med)**: active window 게이트 버그로 밤에 실행되면 플랜 소진 → double-gate (scheduler + claude runner 둘 다 검사) + e2e fake clock 테스트
 - **R3 (Med)**: 동시 worktree 여러 개 존재 시 같은 브랜치 충돌 → v1 은 직렬 실행 1개로 제한, 세마포어 강제
 - **R4 (Low)**: Slack Stop 서명 검증 누락 → 외부 공격자가 임의 kill → signing secret 검증 + timestamp replay 방어 (5분)
-- **R5 (Low)**: SQLite write 동시성 → WAL 모드 + 단일 writer 보장
+- **R5 (Low)**: 다중 인스턴스 / 다중 worker write 동시성 → MySQL InnoDB row-level lock + 트랜잭션. v1 은 단일 인스턴스라 in-process mutex 로도 충분; parallel-tasks 도입 시 `SELECT ... FOR UPDATE SKIP LOCKED` 로 task pickup atomic 보장
 - **R6 (Med)**: rate_limit_event 는 "예측" 이 아닌 "반응" — 첫 wall hit 1건은 fail 불가피 (CLI 가 잔여 quota 를 미노출). 완화: daily/weekly task 카운트 캡 (US-11) 으로 wall 도달 전에 자체 throttle. 카운트 캡 보수적으로 잡으면 wall hit 빈도 최소화 가능.
 
 ## 11. 범위 외 (Out of Scope)
