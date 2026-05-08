@@ -1,8 +1,9 @@
 CREATE TABLE IF NOT EXISTS app_states (
-    key        TEXT PRIMARY KEY,
-    value_json TEXT NOT NULL DEFAULT '{}',
-    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
-);
+    `key`      VARCHAR(64)     NOT NULL,
+    value_json JSON            NOT NULL,
+    updated_at DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-INSERT OR IGNORE INTO app_states (key, value_json) VALUES ('full_mode', '{"enabled": false}');
-INSERT OR IGNORE INTO app_states (key, value_json) VALUES ('last_poll_at', '{"timestamp": null}');
+INSERT IGNORE INTO app_states (`key`, value_json) VALUES ('full_mode',    JSON_OBJECT('enabled', FALSE));
+INSERT IGNORE INTO app_states (`key`, value_json) VALUES ('last_poll_at', JSON_OBJECT('timestamp', NULL));
