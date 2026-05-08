@@ -28,6 +28,7 @@ import (
 
 	sqlcdb "github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/api"
+	"github.com/gs97ahn/claude-ops/internal/ci"
 	"github.com/gs97ahn/claude-ops/internal/claude"
 	"github.com/gs97ahn/claude-ops/internal/config"
 	"github.com/gs97ahn/claude-ops/internal/domain"
@@ -211,6 +212,7 @@ func run() error {
 		WorktreeRoot: cfg.Runtime.WorktreeRoot,
 		PromptsDir:   cfg.Runtime.PromptsDir,
 		LogDir:       "data/logs",
+		CIFixEnabled: cfg.CIFix.Enabled,
 	}
 	worker := scheduler.NewWorker(workerCfg)
 
@@ -245,6 +247,9 @@ func run() error {
 		taskRepo, sharedClock,
 		cfg.Concurrency.ReclaimInterval, cfg.Concurrency.LeaseTimeout,
 	)
+
+	// CI watcher is constructed below, after taskUC exists (the watcher's
+	// FixEnqueuer wraps taskUC.EnqueueFixTask).
 
 	// WindowGate adapter for TaskUseCase (C1 fix: inject window gate so EnqueueFromIssue checks correctly).
 	ucWindowGate := &windowsGateAdapter{windows: windows} // ADDED
@@ -302,6 +307,27 @@ func run() error {
 	go maintenanceSched.Start(schedCtx)
 	go gcRunner.Start(schedCtx)
 	go reclaimer.Start(schedCtx)
+
+	// CI watcher (post-PR check polling + ci-fix enqueue). Only started
+	// when cfg.CIFix.Enabled — otherwise a no-op.
+	if cfg.CIFix.Enabled {
+		ciWatcher := ci.NewWatcher(
+			ci.Config{
+				Enabled:             true,
+				MaxAttempts:         cfg.CIFix.MaxAttempts,
+				PollInterval:        cfg.CIFix.PollInterval,
+				PollTimeout:         cfg.CIFix.PollTimeout,
+				CommentOnExhaustion: cfg.CIFix.CommentOnExhaustion,
+			},
+			taskRepo, eventRepo,
+			&ciFixEnqueuerAdapter{inner: taskUC},
+			ghRunner,
+			&ciSlackAdapter{client: slackClient},
+			ciNoopPromptRenderer{},
+			ciClockAdapter{clock: sharedClock},
+		)
+		go ciWatcher.Start(schedCtx)
+	}
 
 	go func() {
 		slog.Info("HTTP server listening", "addr", cfg.Runtime.HTTPBindAddr)
@@ -458,3 +484,65 @@ type gcSlackAdapter struct {
 func (a *gcSlackAdapter) NotifyOrphaned(ctx context.Context, task *domain.Task) error {
 	return a.client.NotifyOrphaned(ctx, task)
 }
+
+// ----------------------------------------------------------------------
+// ci-fix-loop adapters
+// ----------------------------------------------------------------------
+
+// ciFixEnqueuerAdapter bridges internal/ci.FixEnqueuer to TaskUseCase. The
+// translation is mechanical — usecase.FixTaskInput mirrors ci.FixEnqueueInput.
+type ciFixEnqueuerAdapter struct {
+	inner *usecase.TaskUseCase
+}
+
+func (a *ciFixEnqueuerAdapter) EnqueueFixTask(ctx context.Context, in ci.FixEnqueueInput) (*domain.Task, error) {
+	return a.inner.EnqueueFixTask(ctx, usecase.FixTaskInput{
+		Parent:         in.Parent,
+		HeadSHA:        in.HeadSHA,
+		FailedStep:     in.FailedStep,
+		PromptTemplate: in.PromptTemplate,
+	})
+}
+
+// ciSlackAdapter is a temporary log-only adapter — commit 4 replaces this
+// with islack.Client methods that build the actual Block Kit messages.
+// Until then operators see lifecycle moves in the structured log.
+type ciSlackAdapter struct {
+	client *islack.Client
+}
+
+func (a *ciSlackAdapter) NotifyCIPassed(_ context.Context, task *domain.Task) error {
+	slog.Info("ci: notify passed (stub)", "task_id", task.ID, "pr", task.PRNumber)
+	return nil
+}
+func (a *ciSlackAdapter) NotifyCIFixEnqueued(_ context.Context, task *domain.Task, attempt, maxAttempts int) error {
+	slog.Info("ci: notify fix enqueued (stub)", "task_id", task.ID, "attempt", attempt, "max", maxAttempts)
+	return nil
+}
+func (a *ciSlackAdapter) NotifyCIExhausted(_ context.Context, task *domain.Task, attempts int) error {
+	slog.Warn("ci: notify exhausted (stub)", "task_id", task.ID, "attempts", attempts)
+	return nil
+}
+func (a *ciSlackAdapter) NotifyCIStuck(_ context.Context, task *domain.Task) error {
+	slog.Warn("ci: notify stuck (stub)", "task_id", task.ID)
+	return nil
+}
+func (a *ciSlackAdapter) NotifyCITimeout(_ context.Context, task *domain.Task) error {
+	slog.Warn("ci: notify timeout (stub)", "task_id", task.ID)
+	return nil
+}
+
+// ciNoopPromptRenderer is a placeholder until commit 4 wires up the
+// templated ci-fix prompt. Until then the watcher passes an empty prompt
+// to EnqueueFixTask, which means the fix worker would fall back to its
+// generic Claude template — undesirable in production but harmless during
+// the staged rollout (cfg.CIFix.Enabled defaults to false).
+type ciNoopPromptRenderer struct{}
+
+func (ciNoopPromptRenderer) RenderCIFix(ci.PromptData) (string, error) { return "", nil }
+
+// ciClockAdapter exposes scheduler.Clock as ci.Clock so internal/ci does
+// not depend on internal/scheduler.
+type ciClockAdapter struct{ clock scheduler.Clock }
+
+func (a ciClockAdapter) Now() time.Time { return a.clock.Now() }

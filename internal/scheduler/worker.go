@@ -91,6 +91,11 @@ type WorkerConfig struct {
 	WorktreeRoot string
 	PromptsDir   string
 	LogDir       string
+	// CIFixEnabled enables the post-PR CI watcher hook on markDone. When
+	// true the worker leaves the worktree in place and flips ci_status to
+	// 'watching' so internal/ci.Watcher can pick the row up; when false the
+	// behavior matches v1 (worktree removed, ci_status stays empty).
+	CIFixEnabled bool
 }
 
 // Worker executes a single task end-to-end.
@@ -291,6 +296,16 @@ func (w *Worker) RunTask(ctx context.Context, task *domain.Task) error {
 		if err = w.cfg.Slack.NotifyDone(ctx, task); err != nil {
 			slog.Warn("worker: slack notify done", "err", err)
 		}
+	}
+
+	// ci-fix hook: when enabled and the task produced a PR, defer worktree
+	// cleanup to the watcher (passed/exhausted/timeout/closed → cleanup) and
+	// hand the row over to ci.Watcher by flipping ci_status to 'watching'.
+	// Children of a watching parent (task_type=ci-fix) skip this — they're
+	// the watcher's response to a failure on the *parent's* PR.
+	if w.cfg.CIFixEnabled && task.PRNumber > 0 && task.TaskType != domain.TaskTypeCIFix {
+		_ = w.cfg.TaskRepo.UpdateCIStatus(ctx, task.ID, domain.CIStatusWatching, task.HeadSHA, w.cfg.Clock.Now())
+		return nil
 	}
 
 	// Clean up worktree.
