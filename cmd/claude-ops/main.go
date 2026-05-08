@@ -311,6 +311,10 @@ func run() error {
 	// CI watcher (post-PR check polling + ci-fix enqueue). Only started
 	// when cfg.CIFix.Enabled — otherwise a no-op.
 	if cfg.CIFix.Enabled {
+		promptRenderer, perr := ci.NewFilePromptRenderer(cfg.Runtime.PromptsDir)
+		if perr != nil {
+			return fmt.Errorf("ci-fix prompt: %w", perr)
+		}
 		ciWatcher := ci.NewWatcher(
 			ci.Config{
 				Enabled:             true,
@@ -323,7 +327,7 @@ func run() error {
 			&ciFixEnqueuerAdapter{inner: taskUC},
 			ghRunner,
 			&ciSlackAdapter{client: slackClient},
-			ciNoopPromptRenderer{},
+			promptRenderer,
 			ciClockAdapter{clock: sharedClock},
 		)
 		go ciWatcher.Start(schedCtx)
@@ -531,15 +535,6 @@ func (a *ciSlackAdapter) NotifyCITimeout(_ context.Context, task *domain.Task) e
 	slog.Warn("ci: notify timeout (stub)", "task_id", task.ID)
 	return nil
 }
-
-// ciNoopPromptRenderer is a placeholder until commit 4 wires up the
-// templated ci-fix prompt. Until then the watcher passes an empty prompt
-// to EnqueueFixTask, which means the fix worker would fall back to its
-// generic Claude template — undesirable in production but harmless during
-// the staged rollout (cfg.CIFix.Enabled defaults to false).
-type ciNoopPromptRenderer struct{}
-
-func (ciNoopPromptRenderer) RenderCIFix(ci.PromptData) (string, error) { return "", nil }
 
 // ciClockAdapter exposes scheduler.Clock as ci.Clock so internal/ci does
 // not depend on internal/scheduler.
