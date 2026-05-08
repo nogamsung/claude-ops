@@ -41,18 +41,18 @@ func toDomainTaskEvent(g *gormTaskEvent) *domain.TaskEvent {
 	}
 }
 
-// SQLiteTaskEventRepository implements domain.TaskEventRepository.
-type SQLiteTaskEventRepository struct {
+// GormTaskEventRepository implements domain.TaskEventRepository.
+type GormTaskEventRepository struct {
 	db *gorm.DB
 }
 
-// NewSQLiteTaskEventRepository creates a new SQLiteTaskEventRepository.
-func NewSQLiteTaskEventRepository(db *gorm.DB) *SQLiteTaskEventRepository {
-	return &SQLiteTaskEventRepository{db: db}
+// NewGormTaskEventRepository creates a new GormTaskEventRepository.
+func NewGormTaskEventRepository(db *gorm.DB) *GormTaskEventRepository {
+	return &GormTaskEventRepository{db: db}
 }
 
 // Create inserts a new task event.
-func (r *SQLiteTaskEventRepository) Create(ctx context.Context, event *domain.TaskEvent) error {
+func (r *GormTaskEventRepository) Create(ctx context.Context, event *domain.TaskEvent) error {
 	if err := r.db.WithContext(ctx).Create(toGORMTaskEvent(event)).Error; err != nil {
 		return fmt.Errorf("create task event: %w", err)
 	}
@@ -60,7 +60,7 @@ func (r *SQLiteTaskEventRepository) Create(ctx context.Context, event *domain.Ta
 }
 
 // ListByTaskID returns events for a task, most-recent first, limited to limit rows.
-func (r *SQLiteTaskEventRepository) ListByTaskID(ctx context.Context, taskID string, limit int) ([]*domain.TaskEvent, error) {
+func (r *GormTaskEventRepository) ListByTaskID(ctx context.Context, taskID string, limit int) ([]*domain.TaskEvent, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}

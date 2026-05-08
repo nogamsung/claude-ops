@@ -2,72 +2,24 @@ package repository_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
-
-	"github.com/golang-migrate/migrate/v4"
-	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/google/uuid"
 
 	"github.com/gs97ahn/claude-ops/internal/domain"
 	"github.com/gs97ahn/claude-ops/internal/repository"
+	"github.com/gs97ahn/claude-ops/testutil"
 )
 
-func setupDB(t *testing.T) (*repository.SQLiteTaskRepository, *repository.SQLiteTaskEventRepository, *repository.SQLiteAppStateRepository) {
+func setupDB(t *testing.T) (*repository.GormTaskRepository, *repository.GormTaskEventRepository, *repository.GormAppStateRepository) {
 	t.Helper()
-
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := repository.NewDB(dbPath)
-	if err != nil {
-		t.Fatalf("NewDB: %v", err)
-	}
-	t.Cleanup(func() { sqlDB, _ := db.DB(); sqlDB.Close() })
-
-	// Run migrations.
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	driver, err := migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
-	if err != nil {
-		t.Fatalf("migrate driver: %v", err)
-	}
-
-	// Find migrations directory.
-	migrationsDir := findMigrationsDir(t)
-	m, err := migrate.NewWithDatabaseInstance("file://"+migrationsDir, "sqlite3", driver)
-	if err != nil {
-		t.Fatalf("migrate init: %v", err)
-	}
-	if err = m.Up(); err != nil && err != migrate.ErrNoChange {
-		t.Fatalf("migrate up: %v", err)
-	}
-
-	return repository.NewSQLiteTaskRepository(db),
-		repository.NewSQLiteTaskEventRepository(db),
-		repository.NewSQLiteAppStateRepository(db)
-}
-
-func findMigrationsDir(t *testing.T) string {
-	t.Helper()
-	// Walk up from current dir to find migrations/
-	dir, _ := os.Getwd()
-	for {
-		candidate := filepath.Join(dir, "migrations")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find migrations directory")
-		}
-		dir = parent
-	}
+	db := testutil.NewTestDB(t)
+	return repository.NewGormTaskRepository(db),
+		repository.NewGormTaskEventRepository(db),
+		repository.NewGormAppStateRepository(db)
 }
 
 func TestTaskRepository_CreateAndGetByID(t *testing.T) {
@@ -102,7 +54,7 @@ func TestTaskRepository_CreateAndGetByID(t *testing.T) {
 
 func TestTaskRepository_GetByID_NotFound(t *testing.T) {
 	taskRepo, _, _ := setupDB(t)
-	_, err := taskRepo.GetByID(context.Background(), "nonexistent")
+	_, err := taskRepo.GetByID(context.Background(), "00000000-0000-0000-0000-000000000000")
 	if err != domain.ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
@@ -240,7 +192,9 @@ func TestAppStateRepository_SetAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.ValueJSON != `{"enabled":true}` {
+	// MySQL JSON columns canonicalize whitespace on read, so compare
+	// semantically rather than byte-for-byte.
+	if !jsonEqual(t, got.ValueJSON, `{"enabled":true}`) {
 		t.Errorf("unexpected value: %s", got.ValueJSON)
 	}
 }
@@ -268,7 +222,22 @@ func TestAppStateRepository_Upsert(t *testing.T) {
 	}
 
 	got, _ := appStateRepo.Get(context.Background(), "full_mode")
-	if got.ValueJSON != `{"enabled":true}` {
+	if !jsonEqual(t, got.ValueJSON, `{"enabled":true}`) {
 		t.Errorf("expected upserted value, got %s", got.ValueJSON)
 	}
+}
+
+// jsonEqual reports whether two JSON strings are semantically equal
+// (whitespace-insensitive). Needed because MySQL JSON columns reformat
+// the stored bytes on read.
+func jsonEqual(t *testing.T, a, b string) bool {
+	t.Helper()
+	var av, bv any
+	if err := json.Unmarshal([]byte(a), &av); err != nil {
+		t.Fatalf("jsonEqual: bad lhs %q: %v", a, err)
+	}
+	if err := json.Unmarshal([]byte(b), &bv); err != nil {
+		t.Fatalf("jsonEqual: bad rhs %q: %v", b, err)
+	}
+	return reflect.DeepEqual(av, bv)
 }

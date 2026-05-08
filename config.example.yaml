@@ -1,6 +1,15 @@
 runtime:
   http_bind_addr: "127.0.0.1:8787"
-  db_path: "data/agent.db"
+  db:
+    # MySQL DSN. Required. Set via env var MYSQL_DSN to keep secrets out of YAML.
+    # When using docker-compose, the host is "mysql:3306".
+    # parseTime=true and charset=utf8mb4 are required (NewDB rejects DSNs without them).
+    # Example: "claude_ops:secret@tcp(mysql:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC"
+    dsn: ""
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: "5m"
+    conn_max_idle_time: "1m"
   log_level: "info"
   tick_interval: "30s"
   worktree_root: ".worktrees"

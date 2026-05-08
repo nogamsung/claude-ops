@@ -16,7 +16,7 @@ const maxRangeDays = 365
 type UsageLimitsSnapshot struct {
 	DailyCountUSD  float64  `json:"count_usd"`
 	DailyMaxUSD    float64  `json:"max_usd"`
-	DailyPercent   *float64 `json:"percent"`  // nil when max=0
+	DailyPercent   *float64 `json:"percent"` // nil when max=0
 	DailyDate      string   `json:"date"`
 	WeeklyCountUSD float64  `json:"weekly_count_usd"`
 	WeeklyMaxUSD   float64  `json:"weekly_max_usd"`
@@ -35,9 +35,9 @@ type UsageAggregateResult struct {
 
 // UsageUseCase implements aggregation, by-model, and limits queries.
 type UsageUseCase struct {
-	repo         domain.UsageRepository
-	budgetLimits scheduler.BudgetLimits
-	dailyMaxCost float64
+	repo          domain.UsageRepository
+	budgetLimits  scheduler.BudgetLimits
+	dailyMaxCost  float64
 	weeklyMaxCost float64
 }
 

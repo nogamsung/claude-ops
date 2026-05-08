@@ -7,26 +7,33 @@ All deployments require the following on the host machine:
 1. **Claude Code CLI** — installed and logged in (`claude login`)
 2. **GitHub CLI** — authenticated (`gh auth login`)
 3. **git** 2.17+ (for `git worktree` support)
+4. **MySQL 8.0+** — either via the bundled `docker compose` service, or an
+   externally managed instance the operator points the binary at via `MYSQL_DSN`.
 
 ## systemd Deployment
+
+Assumes a sibling MySQL service (`mysqld.service`) on the same host. For a
+remote/managed MySQL, drop the `After=mysqld.service` line in the unit file
+and ensure `MYSQL_DSN` resolves the right host.
 
 ```bash
 # 1. Build binary
 make build
 sudo cp bin/claude-ops /usr/local/bin/
 
-# 2. Create config directory
-sudo mkdir -p /etc/claude-ops /srv/claude-ops/data /srv/claude-ops/.worktrees
+# 2. Create config + worktree dirs (no /data — DB is now MySQL).
+sudo mkdir -p /etc/claude-ops /srv/claude-ops/.worktrees
 
 # 3. Copy and edit config
 sudo cp config.example.yaml /etc/claude-ops/config.yaml
 sudo vim /etc/claude-ops/config.yaml
 
-# 4. Create .env with secrets (chmod 600)
+# 4. Create .env with secrets (chmod 600). MYSQL_DSN is required.
 sudo bash -c 'cat > /etc/claude-ops/.env' <<EOF
 GITHUB_TOKEN=ghp_your_token_here
 SLACK_BOT_TOKEN=xoxb_your_token_here
 SLACK_SIGNING_SECRET=your_secret_here
+MYSQL_DSN=claude_ops:secret@tcp(127.0.0.1:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC
 EOF
 sudo chmod 600 /etc/claude-ops/.env
 
@@ -62,6 +69,28 @@ docker-compose -f deployments/docker-compose.yml logs -f
 - `~/.claude` (session files) is mounted read-only. The operator must run `claude login` on the host **before** starting the container.
 - `~/.config/gh` is mounted read-only for GitHub CLI auth.
 - Worktrees at `.worktrees/` must be RW — Claude modifies files there.
+- The compose stack ships a `mysql:8.0` sibling service with a named
+  `mysqldata` volume. **Do not run `docker compose down -v`** unless you
+  intend to drop the database.
+
+## Backup & Restore (MySQL)
+
+Quick `mysqldump`-based backup, suitable for the single-instance v1 footprint:
+
+```bash
+# Dump (substitute container name / credentials).
+docker compose -f deployments/docker-compose.yml exec mysql \
+  sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction \
+    --routines --triggers --default-character-set=utf8mb4 \
+    "$MYSQL_DATABASE"' > backup-$(date +%F).sql
+
+# Restore into a fresh database.
+docker compose -f deployments/docker-compose.yml exec -T mysql \
+  sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < backup-YYYY-MM-DD.sql
+```
+
+For point-in-time recovery, enable binary logs and stream them off-host
+(out of scope for v1).
 
 ## Slack Configuration
 

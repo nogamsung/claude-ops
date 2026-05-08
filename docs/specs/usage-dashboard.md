@@ -84,17 +84,17 @@
 
 ## 7. 데이터 모델 (요약)
 
-기존 §7 (scheduled-dev-agent PRD) Task 스키마에 6개 컬럼 추가. 새 마이그레이션 파일로만 추가 (기존 migration 수정 금지 — CLAUDE.md NEVER).
+기존 §7 (claude-ops PRD) Task 스키마에 6개 컬럼 추가. 새 마이그레이션 파일로만 추가 (기존 migration 수정 금지 — CLAUDE.md NEVER). v1.1 의 MySQL 전환과 함께 `cost_usd` 의 SQL 타입은 `DECIMAL(12,6)` (누적 정밀도 보존), JSON 컬럼은 native `JSON` 타입으로 영속.
 
-```
-Task (..., 기존 컬럼 ...,
-      cost_usd REAL NOT NULL DEFAULT 0,                        -- result.total_cost_usd
-      total_input_tokens INTEGER NOT NULL DEFAULT 0,           -- result.usage.input_tokens
-      total_output_tokens INTEGER NOT NULL DEFAULT 0,          -- result.usage.output_tokens
-      cache_creation_input_tokens INTEGER NOT NULL DEFAULT 0,  -- result.usage.cache_creation_input_tokens
-      cache_read_input_tokens INTEGER NOT NULL DEFAULT 0,      -- result.usage.cache_read_input_tokens
-      model_usage_json TEXT NOT NULL DEFAULT '{}'              -- result.modelUsage 원본 JSON
-      )
+```sql
+-- migrations/000005_add_cost_columns_to_tasks.up.sql (MySQL 8.0)
+ALTER TABLE tasks
+    ADD COLUMN cost_usd                    DECIMAL(12,6) NOT NULL DEFAULT 0, -- result.total_cost_usd
+    ADD COLUMN total_input_tokens          BIGINT        NOT NULL DEFAULT 0, -- result.usage.input_tokens
+    ADD COLUMN total_output_tokens         BIGINT        NOT NULL DEFAULT 0, -- result.usage.output_tokens
+    ADD COLUMN cache_creation_input_tokens BIGINT        NOT NULL DEFAULT 0, -- result.usage.cache_creation_input_tokens
+    ADD COLUMN cache_read_input_tokens     BIGINT        NOT NULL DEFAULT 0, -- result.usage.cache_read_input_tokens
+    ADD COLUMN model_usage_json            JSON          NOT NULL;           -- result.modelUsage 원본 JSON
 ```
 
 기존 `estimated_input_tokens` / `estimated_output_tokens` 는 **유지** (호환성). 신규 컬럼은 result 이벤트 기반의 **권위있는** 값. 두 컬럼 셋 모두 채우되, 집계는 신규 컬럼 사용.

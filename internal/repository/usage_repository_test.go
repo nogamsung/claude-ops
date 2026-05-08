@@ -3,12 +3,9 @@ package repository_test
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,36 +13,21 @@ import (
 	sqlcdb "github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/domain"
 	"github.com/gs97ahn/claude-ops/internal/repository"
+	"github.com/gs97ahn/claude-ops/testutil"
 )
 
-// setupUsage creates a fresh SQLite DB with migrations applied and returns both
-// the task repo and the usage repo backed by the same DB.
-func setupUsage(t *testing.T) (*repository.SQLiteTaskRepository, *repository.SQLiteUsageRepository) {
+// setupUsage spins up a MySQL testcontainer with all migrations applied and
+// returns both the task repo and the usage repo backed by the same DB.
+func setupUsage(t *testing.T) (*repository.GormTaskRepository, *repository.GormUsageRepository) {
 	t.Helper()
-
-	dbPath := filepath.Join(t.TempDir(), "usage_test.db")
-	db, err := repository.NewDB(dbPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { s, _ := db.DB(); s.Close() })
-
+	db := testutil.NewTestDB(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-
-	driver, err := migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
-	require.NoError(t, err, "migrate driver")
-
-	migrationsDir := findMigrationsDir(t)
-	m, err := migrate.NewWithDatabaseInstance("file://"+migrationsDir, "sqlite3", driver)
-	require.NoError(t, err, "migrate init")
-	if upErr := m.Up(); upErr != nil && upErr != migrate.ErrNoChange {
-		t.Fatalf("migrate up: %v", upErr)
-	}
-
 	queries := sqlcdb.New(sqlDB)
-	return repository.NewSQLiteTaskRepository(db), repository.NewSQLiteUsageRepository(queries)
+	return repository.NewGormTaskRepository(db), repository.NewGormUsageRepository(queries)
 }
 
-func insertDoneTask(t *testing.T, taskRepo *repository.SQLiteTaskRepository, finishedAt time.Time, costUSD float64, modelUsage map[string]interface{}) {
+func insertDoneTask(t *testing.T, taskRepo *repository.GormTaskRepository, finishedAt time.Time, costUSD float64, modelUsage map[string]interface{}) {
 	t.Helper()
 	mjson := "{}"
 	if len(modelUsage) > 0 {
@@ -72,7 +54,7 @@ func insertDoneTask(t *testing.T, taskRepo *repository.SQLiteTaskRepository, fin
 	require.NoError(t, taskRepo.Create(context.Background(), task))
 }
 
-func insertFailedTask(t *testing.T, taskRepo *repository.SQLiteTaskRepository, finishedAt time.Time, costUSD float64) {
+func insertFailedTask(t *testing.T, taskRepo *repository.GormTaskRepository, finishedAt time.Time, costUSD float64) {
 	t.Helper()
 	task := &domain.Task{
 		ID:             uuid.New().String(),
@@ -169,14 +151,12 @@ func TestUsageRepository_SumDailyCost(t *testing.T) {
 func TestUsageRepository_SumWeeklyCost(t *testing.T) {
 	taskRepo, usageRepo := setupUsage(t)
 
-	// 2026-04-27 is a Monday (week 17 when counting from Mon)
+	// 2026-04-27 is the Monday of ISO 8601 week 18 of 2026.
 	day1 := time.Date(2026, 4, 27, 10, 0, 0, 0, time.UTC)
 	day2 := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
 	insertDoneTask(t, taskRepo, day1, 0.50, nil)
 	insertDoneTask(t, taskRepo, day2, 0.25, nil)
 
-	// SQLite strftime('%Y-W%W', date) uses Sunday-based week numbers (0-based)
-	// Week 17 in that system for 2026-04-27 Monday.
 	total, err := usageRepo.SumWeeklyCost(context.Background(), "2026-W18")
 	require.NoError(t, err)
 	assert.InDelta(t, 0.75, total, 0.001, "both tasks in same week counted")

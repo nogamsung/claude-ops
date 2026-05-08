@@ -25,23 +25,34 @@ type Config struct {
 // DailyMaxCostUSD and WeeklyMaxCostUSD set cost thresholds for Slack warnings.
 // A value of 0 means "no limit" (warnings disabled).
 type LimitsConfig struct {
-	DailyMaxTasks      int     `mapstructure:"daily_max_tasks"`
-	WeeklyMaxTasks     int     `mapstructure:"weekly_max_tasks"`
-	WeekStartsOn       string  `mapstructure:"week_starts_on"`        // mon|sun
-	ResetTZ            string  `mapstructure:"reset_tz"`              // IANA tz, e.g. "Asia/Seoul"
-	DailyMaxCostUSD    float64 `mapstructure:"daily_max_cost_usd"`    // 0 = disabled
-	WeeklyMaxCostUSD   float64 `mapstructure:"weekly_max_cost_usd"`   // 0 = disabled
+	DailyMaxTasks    int     `mapstructure:"daily_max_tasks"`
+	WeeklyMaxTasks   int     `mapstructure:"weekly_max_tasks"`
+	WeekStartsOn     string  `mapstructure:"week_starts_on"`      // mon|sun
+	ResetTZ          string  `mapstructure:"reset_tz"`            // IANA tz, e.g. "Asia/Seoul"
+	DailyMaxCostUSD  float64 `mapstructure:"daily_max_cost_usd"`  // 0 = disabled
+	WeeklyMaxCostUSD float64 `mapstructure:"weekly_max_cost_usd"` // 0 = disabled
 }
 
 // RuntimeConfig holds server and storage settings.
 type RuntimeConfig struct {
 	HTTPBindAddr          string        `mapstructure:"http_bind_addr"`
-	DBPath                string        `mapstructure:"db_path"`
+	DB                    DBSettings    `mapstructure:"db"`
 	LogLevel              string        `mapstructure:"log_level"`
 	TickInterval          time.Duration `mapstructure:"tick_interval"`
 	WorktreeRoot          string        `mapstructure:"worktree_root"`
 	PromptsDir            string        `mapstructure:"prompts_dir"`
 	WorktreeRetentionDays int           `mapstructure:"worktree_retention_days"`
+}
+
+// DBSettings configures the MySQL connection pool. The DSN must include
+// `parseTime=true&charset=utf8mb4` (and ideally `loc=UTC`); NewDB validates this.
+// Zero pool values fall back to library defaults.
+type DBSettings struct {
+	DSN             string        `mapstructure:"dsn"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
 }
 
 // SchedulerConfig defines active time windows and maintenance tasks.
@@ -125,7 +136,11 @@ func Load(path string) (*Config, error) {
 
 	// Defaults
 	v.SetDefault("runtime.http_bind_addr", "127.0.0.1:8787")
-	v.SetDefault("runtime.db_path", "data/agent.db")
+	v.SetDefault("runtime.db.dsn", "")
+	v.SetDefault("runtime.db.max_open_conns", 0)
+	v.SetDefault("runtime.db.max_idle_conns", 0)
+	v.SetDefault("runtime.db.conn_max_lifetime", "5m")
+	v.SetDefault("runtime.db.conn_max_idle_time", "1m")
 	v.SetDefault("runtime.log_level", "info")
 	v.SetDefault("runtime.tick_interval", "30s")
 	v.SetDefault("runtime.worktree_root", ".worktrees")
@@ -150,8 +165,8 @@ func Load(path string) (*Config, error) {
 	if addr := os.Getenv("HTTP_BIND_ADDR"); addr != "" {
 		cfg.Runtime.HTTPBindAddr = addr
 	}
-	if dbPath := os.Getenv("DB_PATH"); dbPath != "" {
-		cfg.Runtime.DBPath = dbPath
+	if dsn := os.Getenv("MYSQL_DSN"); dsn != "" {
+		cfg.Runtime.DB.DSN = dsn
 	}
 
 	return &cfg, nil

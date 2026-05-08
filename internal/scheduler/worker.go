@@ -75,22 +75,22 @@ type QualityGate interface {
 
 // WorkerConfig holds dependencies for the Worker.
 type WorkerConfig struct {
-	TaskRepo      domain.TaskRepository
-	EventRepo     domain.TaskEventRepository
-	AppStateRepo  domain.AppStateRepository
-	Runner        *claude.Runner
-	Canceller     claude.Canceller
-	Slack         SlackNotifier
-	PRCreator     PRCreator
-	Budget        BudgetEnforcer
-	CostWarn      CostWarnEvaluator // optional; nil disables cost warn
-	Metrics       MetricsRecorder
-	QualityGate   QualityGate
-	Clock         Clock
-	Windows       []*domain.ActiveWindow
-	WorktreeRoot  string
-	PromptsDir    string
-	LogDir        string
+	TaskRepo     domain.TaskRepository
+	EventRepo    domain.TaskEventRepository
+	AppStateRepo domain.AppStateRepository
+	Runner       *claude.Runner
+	Canceller    claude.Canceller
+	Slack        SlackNotifier
+	PRCreator    PRCreator
+	Budget       BudgetEnforcer
+	CostWarn     CostWarnEvaluator // optional; nil disables cost warn
+	Metrics      MetricsRecorder
+	QualityGate  QualityGate
+	Clock        Clock
+	Windows      []*domain.ActiveWindow
+	WorktreeRoot string
+	PromptsDir   string
+	LogDir       string
 }
 
 // Worker executes a single task end-to-end.

@@ -121,18 +121,18 @@ func toDomainTask(g *gormTask) *domain.Task {
 	}
 }
 
-// SQLiteTaskRepository implements domain.TaskRepository using GORM + SQLite.
-type SQLiteTaskRepository struct {
+// GormTaskRepository implements domain.TaskRepository using GORM on MySQL.
+type GormTaskRepository struct {
 	db *gorm.DB
 }
 
-// NewSQLiteTaskRepository creates a new SQLiteTaskRepository.
-func NewSQLiteTaskRepository(db *gorm.DB) *SQLiteTaskRepository {
-	return &SQLiteTaskRepository{db: db}
+// NewGormTaskRepository creates a new GormTaskRepository.
+func NewGormTaskRepository(db *gorm.DB) *GormTaskRepository {
+	return &GormTaskRepository{db: db}
 }
 
 // Create inserts a new task.
-func (r *SQLiteTaskRepository) Create(ctx context.Context, task *domain.Task) error {
+func (r *GormTaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	result := r.db.WithContext(ctx).Create(toGORMTask(task))
 	if result.Error != nil {
 		return fmt.Errorf("create task: %w", result.Error)
@@ -141,7 +141,7 @@ func (r *SQLiteTaskRepository) Create(ctx context.Context, task *domain.Task) er
 }
 
 // GetByID fetches a task by its ID.
-func (r *SQLiteTaskRepository) GetByID(ctx context.Context, id string) (*domain.Task, error) {
+func (r *GormTaskRepository) GetByID(ctx context.Context, id string) (*domain.Task, error) {
 	var g gormTask
 	result := r.db.WithContext(ctx).First(&g, "id = ?", id)
 	if result.Error != nil {
@@ -154,7 +154,7 @@ func (r *SQLiteTaskRepository) GetByID(ctx context.Context, id string) (*domain.
 }
 
 // Update saves all fields of a task.
-func (r *SQLiteTaskRepository) Update(ctx context.Context, task *domain.Task) error {
+func (r *GormTaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	g := toGORMTask(task)
 	result := r.db.WithContext(ctx).Save(g)
 	if result.Error != nil {
@@ -165,7 +165,7 @@ func (r *SQLiteTaskRepository) Update(ctx context.Context, task *domain.Task) er
 
 // List returns tasks filtered by the given criteria.
 // Complex filtering uses raw SQL via GORM to stay consistent without sqlc for this simple case.
-func (r *SQLiteTaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]*domain.Task, error) {
+func (r *GormTaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]*domain.Task, error) {
 	query := r.db.WithContext(ctx).Model(&gormTask{})
 
 	if filter.Status != nil {
@@ -198,7 +198,7 @@ func (r *SQLiteTaskRepository) List(ctx context.Context, filter domain.TaskFilte
 }
 
 // GetRunning returns all tasks with status=running.
-func (r *SQLiteTaskRepository) GetRunning(ctx context.Context) ([]*domain.Task, error) {
+func (r *GormTaskRepository) GetRunning(ctx context.Context) ([]*domain.Task, error) {
 	var rows []gormTask
 	if err := r.db.WithContext(ctx).Where("status = ?", string(domain.TaskStatusRunning)).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("get running tasks: %w", err)
@@ -213,7 +213,7 @@ func (r *SQLiteTaskRepository) GetRunning(ctx context.Context) ([]*domain.Task, 
 }
 
 // ExistsByRepoAndIssue reports whether a non-terminal task exists for the given repo+issue.
-func (r *SQLiteTaskRepository) ExistsByRepoAndIssue(ctx context.Context, repoFullName string, issueNumber int) (bool, error) {
+func (r *GormTaskRepository) ExistsByRepoAndIssue(ctx context.Context, repoFullName string, issueNumber int) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&gormTask{}).
 		Where("repo_full_name = ? AND issue_number = ? AND status IN ('queued','running')", repoFullName, issueNumber).

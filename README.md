@@ -19,26 +19,35 @@ gh auth login
 
 # 3. git 2.17+ 확인
 git --version
+
+# 4. MySQL 8.0+ — 로컬 docker compose 또는 외부 인스턴스
+#    docker compose 옵션은 deployments/docker-compose.yml 의 mysql 서비스 참고
 ```
 
-### 설치 및 실행
+### 빠른 시작 (docker compose)
 
 ```bash
-# 소스 빌드
+cp .env.example .env
+vim .env  # GITHUB_TOKEN/SLACK 토큰 + MYSQL_{ROOT_PASSWORD,USER,PASSWORD,DATABASE}
+
+docker compose -f deployments/docker-compose.yml up -d
+docker compose -f deployments/docker-compose.yml logs -f agent
+```
+
+### 소스 빌드 (외부 MySQL 사용 시)
+
+```bash
 make build
 
-# 환경 변수 설정
 cp .env.example .env
-vim .env  # GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET 입력
+vim .env
+# 최소: GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, MYSQL_DSN
+# DSN 예: claude_ops:secret@tcp(127.0.0.1:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC
 
-# 설정 파일 편집
 cp config.example.yaml config.yaml
 vim config.yaml  # active_windows, repos 설정
 
-# 실행
-make run
-# 또는
-./bin/claude-ops -config config.yaml
+make run                     # 또는: ./bin/claude-ops -config config.yaml
 ```
 
 ### claude-opsctl CLI
@@ -204,6 +213,6 @@ internal/
   slack/        Block Kit 빌더, interactions webhook, 서명 검증
   usecase/      비즈니스 로직 (task, mode)
   api/          Gin HTTP 핸들러 + Swagger 주석
-  repository/   GORM + SQLite 구현체
+  repository/   GORM + sqlc(MySQL) 구현체
   domain/       순수 도메인 엔티티 (외부 의존성 없음)
 ```
