@@ -53,20 +53,29 @@ type Metrics struct {
 	Registry *prometheus.Registry
 
 	// Scrape-time sources (read-only, no writes during scrape).
-	budget   BudgetSource
-	window   WindowSource
-	fullMode FullModeSource
-	clock    Clock
+	budget        BudgetSource
+	window        WindowSource
+	fullMode      FullModeSource
+	parallelSlots ParallelSlotsSource
+	clock         Clock
 }
 
 // Options configures Metrics wiring. Any nil source results in the
 // corresponding gauge being absent rather than exported as 0, so dashboards
 // don't show misleading values.
 type Options struct {
-	Budget   BudgetSource
-	Window   WindowSource
-	FullMode FullModeSource
-	Clock    Clock
+	Budget        BudgetSource
+	Window        WindowSource
+	FullMode      FullModeSource
+	ParallelSlots ParallelSlotsSource
+	Clock         Clock
+}
+
+// ParallelSlotsSource exposes the live worker-pool fill state for the
+// claude_ops_parallel_slots_in_use / _max gauges.
+type ParallelSlotsSource interface {
+	SlotsInUse() int
+	MaxSlots() int
 }
 
 // New constructs Metrics and registers every collector on a fresh Registry.
@@ -92,11 +101,12 @@ func New(opts Options) *Metrics {
 			Name: "claude_ops_budget_gate_blocks_total",
 			Help: "Count of budget-gate rejections, by reason.",
 		}, []string{"reason"}),
-		Registry: prometheus.NewRegistry(),
-		budget:   opts.Budget,
-		window:   opts.Window,
-		fullMode: opts.FullMode,
-		clock:    clock,
+		Registry:      prometheus.NewRegistry(),
+		budget:        opts.Budget,
+		window:        opts.Window,
+		fullMode:      opts.FullMode,
+		parallelSlots: opts.ParallelSlots,
+		clock:         clock,
 	}
 	m.Registry.MustRegister(m.TaskDuration, m.TasksTotal, m.BudgetGateBlocks)
 	m.Registry.MustRegister(newDynamicCollector(m))
@@ -139,4 +149,14 @@ func (m *Metrics) RecordWindowClose() {
 		return
 	}
 	m.BudgetGateBlocks.WithLabelValues("window_closed").Inc()
+}
+
+// SetParallelSlots wires the worker-pool source after construction. The
+// scheduler is built later than the Metrics object (since the Metrics
+// recorder is needed by Worker), so we plug it in once both exist.
+func (m *Metrics) SetParallelSlots(src ParallelSlotsSource) {
+	if m == nil {
+		return
+	}
+	m.parallelSlots = src
 }

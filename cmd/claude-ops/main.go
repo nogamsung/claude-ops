@@ -234,6 +234,17 @@ func run() error {
 		WorkerID:         workerID,
 		MaxParallelTasks: cfg.Concurrency.MaxParallelTasks,
 	})
+	// Now that the scheduler exists, wire its slot gauges into the metrics
+	// collector. The Metrics recorder had to be built earlier (Worker needs
+	// it) — SetParallelSlots completes the loop without a circular dep.
+	metricsRecorder.SetParallelSlots(sched)
+
+	// Lease reclaimer — periodic safety net for tasks whose worker died
+	// without clearing the claim. Started below alongside Scheduler.Start.
+	reclaimer := scheduler.NewReclaimer(
+		taskRepo, sharedClock,
+		cfg.Concurrency.ReclaimInterval, cfg.Concurrency.LeaseTimeout,
+	)
 
 	// WindowGate adapter for TaskUseCase (C1 fix: inject window gate so EnqueueFromIssue checks correctly).
 	ucWindowGate := &windowsGateAdapter{windows: windows} // ADDED
@@ -290,6 +301,7 @@ func run() error {
 	go sched.Start(schedCtx)
 	go maintenanceSched.Start(schedCtx)
 	go gcRunner.Start(schedCtx)
+	go reclaimer.Start(schedCtx)
 
 	go func() {
 		slog.Info("HTTP server listening", "addr", cfg.Runtime.HTTPBindAddr)

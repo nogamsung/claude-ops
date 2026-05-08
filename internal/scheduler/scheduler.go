@@ -128,6 +128,13 @@ func (s *Scheduler) Stop() {
 	s.wg.Wait()
 }
 
+// SlotsInUse reports how many worker goroutines are currently running tasks.
+// Suitable for a Prometheus gauge.
+func (s *Scheduler) SlotsInUse() int { return len(s.sem) }
+
+// MaxSlots reports the configured worker-pool capacity.
+func (s *Scheduler) MaxSlots() int { return cap(s.sem) }
+
 // CancelTask cancels a running task by its ID (implements TaskCanceller).
 func (s *Scheduler) CancelTask(_ context.Context, taskID string) error {
 	s.mu.Lock()
