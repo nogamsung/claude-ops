@@ -83,6 +83,9 @@ mockery --name=<Interface> --dir=internal/domain --output=mocks
 ### 2026-04-14 — sqlc·golangci-lint 필수화
 동적 쿼리는 sqlc 로 타입 안전 생성. raw SQL 문자열 금지. 모든 코드 golangci-lint 통과 필수.
 
+### 2026-05-08 — parallel-tasks 토대 머지 (default `max_parallel_tasks=1`)
+Worker pickup 은 `taskRepo.ClaimNext` (sqlc + MySQL `FOR UPDATE SKIP LOCKED` + 같은 레포 직렬화용 `NOT EXISTS`) 로 race-free atomic. 같은 레포 동시 처리 차단은 SQL 레이어가 책임 — 새 worker pool 코드에 in-memory `sync.Map[repo]*Mutex` 추가 금지. lease 만료 task 회수는 `scheduler.Reclaimer` (default 10m 간격, 60m lease). `concurrency.max_parallel_tasks` 를 2/3 으로 올릴 때만 병렬 코드 경로가 활성화.
+
 <!-- /rule 로 여기에 추가됩니다 -->
 
 ## Memory
