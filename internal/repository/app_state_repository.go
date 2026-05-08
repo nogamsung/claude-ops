@@ -31,10 +31,11 @@ func NewGormAppStateRepository(db *gorm.DB) *GormAppStateRepository {
 	return &GormAppStateRepository{db: db}
 }
 
-// Get retrieves a state entry by key.
+// Get retrieves a state entry by key. The column name `key` is a MySQL
+// reserved word, so we escape it with backticks in the raw WHERE clause.
 func (r *GormAppStateRepository) Get(ctx context.Context, key string) (*domain.AppState, error) {
 	var g gormAppState
-	if err := r.db.WithContext(ctx).First(&g, "key = ?", key).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&g, "`key` = ?", key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domain.ErrNotFound
 		}

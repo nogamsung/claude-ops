@@ -25,7 +25,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gs97ahn/claude-ops/db/sqlc"
+	sqlcdb "github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/api"
 	"github.com/gs97ahn/claude-ops/internal/claude"
 	"github.com/gs97ahn/claude-ops/internal/config"

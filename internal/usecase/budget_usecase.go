@@ -45,12 +45,12 @@ type limitsOverrideJSON struct {
 
 // costWarnStateJSON is the persisted shape of the cost warning flags.
 type costWarnStateJSON struct {
-	DailyKey          string `json:"daily_key"`
-	DailyWarned80     bool   `json:"daily_warned_80"`
-	DailyWarned100    bool   `json:"daily_warned_100"`
-	WeeklyKey         string `json:"weekly_key"`
-	WeeklyWarned80    bool   `json:"weekly_warned_80"`
-	WeeklyWarned100   bool   `json:"weekly_warned_100"`
+	DailyKey        string `json:"daily_key"`
+	DailyWarned80   bool   `json:"daily_warned_80"`
+	DailyWarned100  bool   `json:"daily_warned_100"`
+	WeeklyKey       string `json:"weekly_key"`
+	WeeklyWarned80  bool   `json:"weekly_warned_80"`
+	WeeklyWarned100 bool   `json:"weekly_warned_100"`
 }
 
 // CostWarnNotifier sends Slack messages for cost threshold crossings.

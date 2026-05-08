@@ -25,12 +25,12 @@ type Config struct {
 // DailyMaxCostUSD and WeeklyMaxCostUSD set cost thresholds for Slack warnings.
 // A value of 0 means "no limit" (warnings disabled).
 type LimitsConfig struct {
-	DailyMaxTasks      int     `mapstructure:"daily_max_tasks"`
-	WeeklyMaxTasks     int     `mapstructure:"weekly_max_tasks"`
-	WeekStartsOn       string  `mapstructure:"week_starts_on"`        // mon|sun
-	ResetTZ            string  `mapstructure:"reset_tz"`              // IANA tz, e.g. "Asia/Seoul"
-	DailyMaxCostUSD    float64 `mapstructure:"daily_max_cost_usd"`    // 0 = disabled
-	WeeklyMaxCostUSD   float64 `mapstructure:"weekly_max_cost_usd"`   // 0 = disabled
+	DailyMaxTasks    int     `mapstructure:"daily_max_tasks"`
+	WeeklyMaxTasks   int     `mapstructure:"weekly_max_tasks"`
+	WeekStartsOn     string  `mapstructure:"week_starts_on"`      // mon|sun
+	ResetTZ          string  `mapstructure:"reset_tz"`            // IANA tz, e.g. "Asia/Seoul"
+	DailyMaxCostUSD  float64 `mapstructure:"daily_max_cost_usd"`  // 0 = disabled
+	WeeklyMaxCostUSD float64 `mapstructure:"weekly_max_cost_usd"` // 0 = disabled
 }
 
 // RuntimeConfig holds server and storage settings.
