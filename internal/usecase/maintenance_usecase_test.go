@@ -34,6 +34,12 @@ func (r *fakeMaintenanceTaskRepo) GetRunning(_ context.Context) ([]*domain.Task,
 func (r *fakeMaintenanceTaskRepo) ExistsByRepoAndIssue(_ context.Context, _ string, _ int) (bool, error) {
 	return false, nil
 }
+func (r *fakeMaintenanceTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeMaintenanceTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 type fakeMaintenanceAppStateRepo struct {
 	states map[string]*domain.AppState

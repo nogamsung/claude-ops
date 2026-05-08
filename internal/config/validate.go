@@ -31,6 +31,29 @@ func (c *Config) Validate() error {
 	if err := c.validateMaintenanceTasks(); err != nil {
 		return err
 	}
+	if err := c.validateConcurrency(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) validateConcurrency() error {
+	if c.Concurrency.MaxParallelTasks < 1 {
+		return fmt.Errorf("concurrency.max_parallel_tasks must be >= 1")
+	}
+	if c.Concurrency.MaxParallelTasks > 10 {
+		return fmt.Errorf("concurrency.max_parallel_tasks > 10 is unsupported (PRD §5 US-8 caps spike at 3)")
+	}
+	if c.Concurrency.LeaseTimeout <= 0 {
+		return fmt.Errorf("concurrency.lease_timeout must be positive")
+	}
+	if c.Concurrency.ReclaimInterval <= 0 {
+		return fmt.Errorf("concurrency.reclaim_interval must be positive")
+	}
+	if c.Concurrency.ReclaimInterval >= c.Concurrency.LeaseTimeout {
+		return fmt.Errorf("concurrency.reclaim_interval (%s) must be less than lease_timeout (%s) so stale rows are observed at least once",
+			c.Concurrency.ReclaimInterval, c.Concurrency.LeaseTimeout)
+	}
 	return nil
 }
 

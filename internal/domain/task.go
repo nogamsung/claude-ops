@@ -69,6 +69,11 @@ type Task struct {
 	CacheCreationInputTokens int64
 	CacheReadInputTokens     int64
 	ModelUsageJSON           string // raw JSON; empty value is "{}"
+	// Concurrency claim state (parallel-tasks). WorkerID is the opaque token
+	// of the worker that holds the row; ClaimedAt is when ClaimNextTask
+	// flipped it to running. Both are nil for queued/terminal rows.
+	WorkerID  *string
+	ClaimedAt *time.Time
 }
 
 // EventKind is the type of a task lifecycle event.

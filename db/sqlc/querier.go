@@ -6,9 +6,27 @@ package sqlcdb
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	// Atomically pick one queued task and flip it to running. Skips:
+	//   * Rows another transaction already locked (FOR UPDATE SKIP LOCKED) —
+	//     this is what makes parallel workers race-free without an in-process mutex.
+	//   * Rows whose repo already has a task in 'running' (NOT EXISTS subquery) —
+	//     this serializes per-repo work even across workers, satisfying the
+	//     parallel-tasks PRD's "same-repo never concurrent" rule at the SQL
+	//     layer rather than relying on application-side mutexes.
+	// The derived-table wrapping is required because MySQL refuses self-reference
+	// in the same UPDATE/SELECT (Error 1093).
+	ClaimNextTask(ctx context.Context, workerID sql.NullString) (int64, error)
+	// Returns the most recently claimed task for a worker. Used right after
+	// ClaimNextTask reports rowsAffected=1 to load the row.
+	GetClaimedTaskID(ctx context.Context, workerID sql.NullString) (string, error)
+	// Periodic safety net: marks tasks orphaned when their worker died without
+	// clearing the claim. The cutoff is `now - lease_timeout`; rows still being
+	// actively processed have a fresher claimed_at and survive.
+	ReclaimStaleTasks(ctx context.Context, cutoff sql.NullTime) (int64, error)
 	// Caller resolves the day boundary in the configured tz and passes
 	// [day_start, day_end) as a half-open range (e.g. 00:00:00.000 of day N
 	// and day N+1). Range comparison lets MySQL use the timestamp index.

@@ -24,7 +24,7 @@ func setupUsage(t *testing.T) (*repository.GormTaskRepository, *repository.GormU
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	queries := sqlcdb.New(sqlDB)
-	return repository.NewGormTaskRepository(db), repository.NewGormUsageRepository(queries)
+	return repository.NewGormTaskRepository(db, queries), repository.NewGormUsageRepository(queries)
 }
 
 func insertDoneTask(t *testing.T, taskRepo *repository.GormTaskRepository, finishedAt time.Time, costUSD float64, modelUsage map[string]interface{}) {

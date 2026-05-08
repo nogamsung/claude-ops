@@ -72,6 +72,12 @@ func (r *preloadedTaskRepo) GetRunning(_ context.Context) ([]*domain.Task, error
 func (r *preloadedTaskRepo) ExistsByRepoAndIssue(_ context.Context, _ string, _ int) (bool, error) {
 	return false, nil
 }
+func (r *preloadedTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *preloadedTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 // TestE2E_OutsideWindow_ZeroClaudeInvocations verifies that when the clock
 // is outside the active time window and full-mode is off, the worker

@@ -12,11 +12,27 @@ import (
 
 // Config is the root application configuration.
 type Config struct {
-	Runtime   RuntimeConfig   `mapstructure:"runtime"`
-	Scheduler SchedulerConfig `mapstructure:"scheduler"`
-	Limits    LimitsConfig    `mapstructure:"limits"`
-	GitHub    GitHubConfig    `mapstructure:"github"`
-	Slack     SlackConfig     `mapstructure:"slack"`
+	Runtime     RuntimeConfig     `mapstructure:"runtime"`
+	Scheduler   SchedulerConfig   `mapstructure:"scheduler"`
+	Concurrency ConcurrencyConfig `mapstructure:"concurrency"`
+	Limits      LimitsConfig      `mapstructure:"limits"`
+	GitHub      GitHubConfig      `mapstructure:"github"`
+	Slack       SlackConfig       `mapstructure:"slack"`
+}
+
+// ConcurrencyConfig controls the parallel-tasks worker pool. The default
+// (max_parallel_tasks=1) keeps v1 byte-for-byte behavior; raise it only
+// after running the spike acceptance gates in PRD §6.5.
+//
+// LeaseTimeout is how long a claimed-but-unfinished task may look alive
+// before the periodic reclaimer marks it orphaned (worker died). Pick a
+// value comfortably larger than the longest realistic task — 60m is the
+// PRD-recommended default for ~30m average tasks. ReclaimInterval controls
+// how often the safety-net runs (default 10m).
+type ConcurrencyConfig struct {
+	MaxParallelTasks int           `mapstructure:"max_parallel_tasks"`
+	LeaseTimeout     time.Duration `mapstructure:"lease_timeout"`
+	ReclaimInterval  time.Duration `mapstructure:"reclaim_interval"`
 }
 
 // LimitsConfig caps how many tasks may run per day/week and how the buckets reset.
@@ -151,6 +167,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("limits.weekly_max_tasks", 0) // 0 → derived = daily * 7
 	v.SetDefault("limits.week_starts_on", "mon")
 	v.SetDefault("limits.reset_tz", "Asia/Seoul")
+	v.SetDefault("concurrency.max_parallel_tasks", 1) // v1 byte-compat default
+	v.SetDefault("concurrency.lease_timeout", "60m")
+	v.SetDefault("concurrency.reclaim_interval", "10m")
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config %q: %w", path, err)

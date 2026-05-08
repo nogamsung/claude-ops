@@ -73,6 +73,12 @@ func (r *fakeTaskRepo) GetRunning(_ context.Context) ([]*domain.Task, error) {
 func (r *fakeTaskRepo) ExistsByRepoAndIssue(_ context.Context, _ string, _ int) (bool, error) {
 	return false, nil
 }
+func (r *fakeTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
 
 // fakeGit is a scriptable GitRunner for GC tests.
 type fakeGit struct {
@@ -320,6 +326,12 @@ func (r *errRepo) GetRunning(context.Context) ([]*domain.Task, error) {
 }
 func (r *errRepo) ExistsByRepoAndIssue(context.Context, string, int) (bool, error) {
 	return false, r.err
+}
+func (r *errRepo) ClaimNext(context.Context, string) (*domain.Task, error) {
+	return nil, r.err
+}
+func (r *errRepo) ReclaimStale(context.Context, time.Time) (int64, error) {
+	return 0, r.err
 }
 
 func TestRecoverOrphans_GetRunningErrorIsLoggedNotPanic(t *testing.T) {

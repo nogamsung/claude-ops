@@ -43,6 +43,8 @@ type Task struct {
 	CacheCreationInputTokens int64           `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int64           `json:"cache_read_input_tokens"`
 	ModelUsageJson           json.RawMessage `json:"model_usage_json"`
+	WorkerID                 sql.NullString  `json:"worker_id"`
+	ClaimedAt                sql.NullTime    `json:"claimed_at"`
 }
 
 type TaskEvent struct {

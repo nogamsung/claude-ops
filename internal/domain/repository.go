@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // TaskFilter contains optional filters for listing tasks.
 type TaskFilter struct {
@@ -18,6 +21,19 @@ type TaskRepository interface {
 	List(ctx context.Context, filter TaskFilter) ([]*Task, error)
 	GetRunning(ctx context.Context) ([]*Task, error)
 	ExistsByRepoAndIssue(ctx context.Context, repoFullName string, issueNumber int) (bool, error)
+
+	// ClaimNext atomically picks the oldest queued task whose repo has no
+	// running task yet, sets status=running with the given workerID, and
+	// returns the loaded Task. Returns (nil, nil) when no eligible row exists.
+	// Implementations rely on FOR UPDATE SKIP LOCKED so multiple workers can
+	// call this concurrently without coordinating in-process.
+	ClaimNext(ctx context.Context, workerID string) (*Task, error)
+
+	// ReclaimStale marks running tasks whose claim is older than `cutoff`
+	// (typically now - lease_timeout) as orphaned and clears the worker_id.
+	// Returns the number of rows reclaimed. Called periodically by the
+	// scheduler to recover after a crashed worker.
+	ReclaimStale(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // TaskEventRepository defines storage operations for TaskEvent entities.

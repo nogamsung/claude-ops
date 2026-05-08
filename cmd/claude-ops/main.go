@@ -118,13 +118,14 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
+	// sqlc query layer (usage aggregation + ClaimNext/ReclaimStale).
+	// Constructed first because TaskRepository now depends on it.
+	sqlcQueries := sqlcdb.New(sqlDB)
+
 	// Repositories.
-	taskRepo := repository.NewGormTaskRepository(db)
+	taskRepo := repository.NewGormTaskRepository(db, sqlcQueries)
 	eventRepo := repository.NewGormTaskEventRepository(db)
 	appStateRepo := repository.NewGormAppStateRepository(db)
-
-	// sqlc query layer (usage aggregation). Reuses the same *sql.DB from above.
-	sqlcQueries := sqlcdb.New(sqlDB)
 	usageRepo := repository.NewGormUsageRepository(sqlcQueries)
 
 	// Active windows.

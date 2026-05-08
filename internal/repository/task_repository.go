@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
+	sqlcdb "github.com/gs97ahn/claude-ops/db/sqlc"
 	"github.com/gs97ahn/claude-ops/internal/domain"
 )
 
@@ -39,6 +41,8 @@ type gormTask struct {
 	CacheCreationInputTokens int64      `gorm:"column:cache_creation_input_tokens"`
 	CacheReadInputTokens     int64      `gorm:"column:cache_read_input_tokens"`
 	ModelUsageJSON           string     `gorm:"column:model_usage_json"`
+	WorkerID                 *string    `gorm:"column:worker_id"`
+	ClaimedAt                *time.Time `gorm:"column:claimed_at"`
 }
 
 func (gormTask) TableName() string { return "tasks" }
@@ -79,6 +83,8 @@ func toGORMTask(t *domain.Task) *gormTask {
 		CacheCreationInputTokens: t.CacheCreationInputTokens,
 		CacheReadInputTokens:     t.CacheReadInputTokens,
 		ModelUsageJSON:           modelJSON,
+		WorkerID:                 t.WorkerID,
+		ClaimedAt:                t.ClaimedAt,
 	}
 }
 
@@ -118,17 +124,25 @@ func toDomainTask(g *gormTask) *domain.Task {
 		CacheCreationInputTokens: g.CacheCreationInputTokens,
 		CacheReadInputTokens:     g.CacheReadInputTokens,
 		ModelUsageJSON:           modelJSON,
+		WorkerID:                 g.WorkerID,
+		ClaimedAt:                g.ClaimedAt,
 	}
 }
 
 // GormTaskRepository implements domain.TaskRepository using GORM on MySQL.
+// The sqlc Queries handle is used only for the concurrency-sensitive
+// ClaimNext / ReclaimStale paths that need MySQL-specific FOR UPDATE
+// SKIP LOCKED + NOT EXISTS semantics; everything else stays on GORM.
 type GormTaskRepository struct {
-	db *gorm.DB
+	db      *gorm.DB
+	queries *sqlcdb.Queries
 }
 
-// NewGormTaskRepository creates a new GormTaskRepository.
-func NewGormTaskRepository(db *gorm.DB) *GormTaskRepository {
-	return &GormTaskRepository{db: db}
+// NewGormTaskRepository creates a new GormTaskRepository. queries may be nil
+// for callers that never invoke ClaimNext/ReclaimStale (e.g. legacy tests),
+// in which case those methods return an error.
+func NewGormTaskRepository(db *gorm.DB, queries *sqlcdb.Queries) *GormTaskRepository {
+	return &GormTaskRepository{db: db, queries: queries}
 }
 
 // Create inserts a new task.
@@ -222,4 +236,41 @@ func (r *GormTaskRepository) ExistsByRepoAndIssue(ctx context.Context, repoFullN
 		return false, fmt.Errorf("exists by repo and issue: %w", err)
 	}
 	return count > 0, nil
+}
+
+// ClaimNext atomically picks the oldest queued task whose repo has no
+// running task, flips it to running with the given workerID, and returns the
+// loaded row. Uses MySQL FOR UPDATE SKIP LOCKED so concurrent workers do not
+// step on each other. Returns (nil, nil) when no eligible row exists.
+func (r *GormTaskRepository) ClaimNext(ctx context.Context, workerID string) (*domain.Task, error) {
+	if r.queries == nil {
+		return nil, fmt.Errorf("ClaimNext: sqlc queries not wired")
+	}
+	wid := sql.NullString{String: workerID, Valid: workerID != ""}
+	rows, err := r.queries.ClaimNextTask(ctx, wid)
+	if err != nil {
+		return nil, fmt.Errorf("claim next task: %w", err)
+	}
+	if rows == 0 {
+		return nil, nil
+	}
+	taskID, err := r.queries.GetClaimedTaskID(ctx, wid)
+	if err != nil {
+		return nil, fmt.Errorf("load claimed task id: %w", err)
+	}
+	return r.GetByID(ctx, taskID)
+}
+
+// ReclaimStale marks running rows whose claim is older than cutoff as
+// orphaned and clears their worker_id, so a periodic safety net can recover
+// after a crashed worker.
+func (r *GormTaskRepository) ReclaimStale(ctx context.Context, cutoff time.Time) (int64, error) {
+	if r.queries == nil {
+		return 0, fmt.Errorf("ReclaimStale: sqlc queries not wired")
+	}
+	rows, err := r.queries.ReclaimStaleTasks(ctx, sql.NullTime{Time: cutoff, Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("reclaim stale tasks: %w", err)
+	}
+	return rows, nil
 }
