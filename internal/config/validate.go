@@ -34,6 +34,32 @@ func (c *Config) Validate() error {
 	if err := c.validateConcurrency(); err != nil {
 		return err
 	}
+	if err := c.validateCIFix(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Config) validateCIFix() error {
+	if !c.CIFix.Enabled {
+		return nil
+	}
+	if c.CIFix.MaxAttempts < 1 {
+		return fmt.Errorf("ci_fix.max_attempts must be >= 1 when enabled")
+	}
+	if c.CIFix.MaxAttempts > 5 {
+		return fmt.Errorf("ci_fix.max_attempts > 5 is unsupported (PRD recommends <=2)")
+	}
+	if c.CIFix.PollInterval <= 0 {
+		return fmt.Errorf("ci_fix.poll_interval must be positive when enabled")
+	}
+	if c.CIFix.PollTimeout <= 0 {
+		return fmt.Errorf("ci_fix.poll_timeout must be positive when enabled")
+	}
+	if c.CIFix.PollInterval >= c.CIFix.PollTimeout {
+		return fmt.Errorf("ci_fix.poll_interval (%s) must be less than poll_timeout (%s)",
+			c.CIFix.PollInterval, c.CIFix.PollTimeout)
+	}
 	return nil
 }
 
