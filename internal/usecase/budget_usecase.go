@@ -69,8 +69,8 @@ type BudgetSnapshot struct {
 // BudgetUseCase persists task counters and rate-limit blocks.
 //
 // All reads/writes go through a single mutex so increment-after-rollover stays
-// race-free at the in-process level. SQLite is the single writer too, so there
-// is no second writer to coordinate with.
+// race-free at the in-process level. Multi-writer coordination across worker
+// instances will rely on row-level locking once parallel-tasks lands.
 type BudgetUseCase struct {
 	appStateRepo     domain.AppStateRepository
 	configLimits     scheduler.BudgetLimits

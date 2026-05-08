@@ -40,9 +40,10 @@ import (
 	"github.com/gs97ahn/claude-ops/internal/usecase"
 
 	"github.com/golang-migrate/migrate/v4"
-	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"
+	migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/mattn/go-sqlite3"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -82,7 +83,13 @@ func run() error {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 
 	// Database.
-	db, err := repository.NewDB(cfg.Runtime.DBPath)
+	db, err := repository.NewDB(repository.DBConfig{
+		DSN:             cfg.Runtime.DB.DSN,
+		MaxOpenConns:    cfg.Runtime.DB.MaxOpenConns,
+		MaxIdleConns:    cfg.Runtime.DB.MaxIdleConns,
+		ConnMaxLifetime: cfg.Runtime.DB.ConnMaxLifetime,
+		ConnMaxIdleTime: cfg.Runtime.DB.ConnMaxIdleTime,
+	})
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
@@ -97,11 +104,11 @@ func run() error {
 	}()
 
 	// Run migrations.
-	driver, err := migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
+	driver, err := migratemysql.WithInstance(sqlDB, &migratemysql.Config{})
 	if err != nil {
 		return fmt.Errorf("migrate driver: %w", err)
 	}
-	m, err := migrate.NewWithDatabaseInstance("file://migrations", "sqlite3", driver)
+	m, err := migrate.NewWithDatabaseInstance("file://migrations", "mysql", driver)
 	if err != nil {
 		return fmt.Errorf("migration init: %w", err)
 	}
@@ -111,13 +118,13 @@ func run() error {
 	slog.Info("migrations applied")
 
 	// Repositories.
-	taskRepo := repository.NewSQLiteTaskRepository(db)
-	eventRepo := repository.NewSQLiteTaskEventRepository(db)
-	appStateRepo := repository.NewSQLiteAppStateRepository(db)
+	taskRepo := repository.NewGormTaskRepository(db)
+	eventRepo := repository.NewGormTaskEventRepository(db)
+	appStateRepo := repository.NewGormAppStateRepository(db)
 
 	// sqlc query layer (usage aggregation). Reuses the same *sql.DB from above.
 	sqlcQueries := sqlcdb.New(sqlDB)
-	usageRepo := repository.NewSQLiteUsageRepository(sqlcQueries)
+	usageRepo := repository.NewGormUsageRepository(sqlcQueries)
 
 	// Active windows.
 	windows, err := cfg.ActiveWindows()

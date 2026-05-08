@@ -27,7 +27,8 @@ func TestLoad_ValidConfig(t *testing.T) {
 	yaml := `
 runtime:
   http_bind_addr: "127.0.0.1:8787"
-  db_path: "data/agent.db"
+  db:
+    dsn: "user:pass@tcp(localhost:3306)/claude_ops?parseTime=true&charset=utf8mb4"
   log_level: "info"
   tick_interval: "30s"
   worktree_root: ".worktrees"

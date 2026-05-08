@@ -20,19 +20,19 @@ type modelUsageEntry struct {
 	CostUSD                  float64 `json:"costUSD"`
 }
 
-// SQLiteUsageRepository implements domain.UsageRepository using sqlc.
-// Name kept for backward compatibility; renamed to GormUsageRepository in a follow-up commit.
-type SQLiteUsageRepository struct {
+// GormUsageRepository implements domain.UsageRepository using sqlc-generated
+// queries against MySQL.
+type GormUsageRepository struct {
 	queries *sqlcdb.Queries
 }
 
-// NewSQLiteUsageRepository creates a new SQLiteUsageRepository.
-func NewSQLiteUsageRepository(queries *sqlcdb.Queries) *SQLiteUsageRepository {
-	return &SQLiteUsageRepository{queries: queries}
+// NewGormUsageRepository creates a new GormUsageRepository.
+func NewGormUsageRepository(queries *sqlcdb.Queries) *GormUsageRepository {
+	return &GormUsageRepository{queries: queries}
 }
 
 // SumByBucket aggregates usage data grouped by the specified bucket granularity.
-func (r *SQLiteUsageRepository) SumByBucket(ctx context.Context, from, to time.Time, bucket domain.BucketKind) ([]domain.UsageBucketRow, error) {
+func (r *GormUsageRepository) SumByBucket(ctx context.Context, from, to time.Time, bucket domain.BucketKind) ([]domain.UsageBucketRow, error) {
 	switch bucket {
 	case domain.BucketDay:
 		return r.sumByDay(ctx, from, to)
@@ -45,7 +45,7 @@ func (r *SQLiteUsageRepository) SumByBucket(ctx context.Context, from, to time.T
 	}
 }
 
-func (r *SQLiteUsageRepository) sumByDay(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
+func (r *GormUsageRepository) sumByDay(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
 	rows, err := r.queries.SumUsageByDay(ctx, sqlcdb.SumUsageByDayParams{
 		FromTs: nullTime(from),
 		ToTs:   nullTime(to),
@@ -69,7 +69,7 @@ func (r *SQLiteUsageRepository) sumByDay(ctx context.Context, from, to time.Time
 	return out, nil
 }
 
-func (r *SQLiteUsageRepository) sumByWeek(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
+func (r *GormUsageRepository) sumByWeek(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
 	rows, err := r.queries.SumUsageByWeek(ctx, sqlcdb.SumUsageByWeekParams{
 		FromTs: nullTime(from),
 		ToTs:   nullTime(to),
@@ -93,7 +93,7 @@ func (r *SQLiteUsageRepository) sumByWeek(ctx context.Context, from, to time.Tim
 	return out, nil
 }
 
-func (r *SQLiteUsageRepository) sumByMonth(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
+func (r *GormUsageRepository) sumByMonth(ctx context.Context, from, to time.Time) ([]domain.UsageBucketRow, error) {
 	rows, err := r.queries.SumUsageByMonth(ctx, sqlcdb.SumUsageByMonthParams{
 		FromTs: nullTime(from),
 		ToTs:   nullTime(to),
@@ -119,7 +119,7 @@ func (r *SQLiteUsageRepository) sumByMonth(ctx context.Context, from, to time.Ti
 
 // SumByModel aggregates per-model usage for done tasks via application-side JSON expansion.
 // PRD §10 R2 — JSON storage + application-side scan is OK for v1 (≤10k tasks).
-func (r *SQLiteUsageRepository) SumByModel(ctx context.Context, from, to time.Time) ([]domain.UsageModelRow, error) {
+func (r *GormUsageRepository) SumByModel(ctx context.Context, from, to time.Time) ([]domain.UsageModelRow, error) {
 	rows, err := r.queries.SumUsageByModel(ctx, sqlcdb.SumUsageByModelParams{
 		FromTs: nullTime(from),
 		ToTs:   nullTime(to),
@@ -200,7 +200,7 @@ func (r *SQLiteUsageRepository) SumByModel(ctx context.Context, from, to time.Ti
 // SumDailyCost returns the total cost_usd for done tasks on the given day key (YYYY-MM-DD).
 // The day boundary is resolved in UTC; callers that need a different tz should
 // adjust the key generator accordingly.
-func (r *SQLiteUsageRepository) SumDailyCost(ctx context.Context, dayKey string) (float64, error) {
+func (r *GormUsageRepository) SumDailyCost(ctx context.Context, dayKey string) (float64, error) {
 	start, end, err := dayKeyToRange(dayKey)
 	if err != nil {
 		return 0, fmt.Errorf("sum daily cost parse key %q: %w", dayKey, err)
@@ -216,7 +216,7 @@ func (r *SQLiteUsageRepository) SumDailyCost(ctx context.Context, dayKey string)
 }
 
 // SumWeeklyCost returns the total cost_usd for done tasks in the given ISO 8601 week key (YYYY-Www).
-func (r *SQLiteUsageRepository) SumWeeklyCost(ctx context.Context, weekKey string) (float64, error) {
+func (r *GormUsageRepository) SumWeeklyCost(ctx context.Context, weekKey string) (float64, error) {
 	start, end, err := weekKeyToRange(weekKey)
 	if err != nil {
 		return 0, fmt.Errorf("sum weekly cost parse key %q: %w", weekKey, err)

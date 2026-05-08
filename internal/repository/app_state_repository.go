@@ -21,18 +21,18 @@ type gormAppState struct {
 
 func (gormAppState) TableName() string { return "app_states" }
 
-// SQLiteAppStateRepository implements domain.AppStateRepository.
-type SQLiteAppStateRepository struct {
+// GormAppStateRepository implements domain.AppStateRepository.
+type GormAppStateRepository struct {
 	db *gorm.DB
 }
 
-// NewSQLiteAppStateRepository creates a new SQLiteAppStateRepository.
-func NewSQLiteAppStateRepository(db *gorm.DB) *SQLiteAppStateRepository {
-	return &SQLiteAppStateRepository{db: db}
+// NewGormAppStateRepository creates a new GormAppStateRepository.
+func NewGormAppStateRepository(db *gorm.DB) *GormAppStateRepository {
+	return &GormAppStateRepository{db: db}
 }
 
 // Get retrieves a state entry by key.
-func (r *SQLiteAppStateRepository) Get(ctx context.Context, key string) (*domain.AppState, error) {
+func (r *GormAppStateRepository) Get(ctx context.Context, key string) (*domain.AppState, error) {
 	var g gormAppState
 	if err := r.db.WithContext(ctx).First(&g, "key = ?", key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -44,7 +44,7 @@ func (r *SQLiteAppStateRepository) Get(ctx context.Context, key string) (*domain
 }
 
 // Set upserts a state entry.
-func (r *SQLiteAppStateRepository) Set(ctx context.Context, state *domain.AppState) error {
+func (r *GormAppStateRepository) Set(ctx context.Context, state *domain.AppState) error {
 	g := &gormAppState{
 		Key:       state.Key,
 		ValueJSON: state.ValueJSON,
