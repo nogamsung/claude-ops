@@ -27,6 +27,12 @@ type TaskResponse struct {
 	EstimatedOutputTokens int        `json:"estimated_output_tokens,omitempty" example:"500"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+	// ci-fix-loop fields. Empty / zero values mean "not watched".
+	CIStatus        string     `json:"ci_status,omitempty" example:"watching"`
+	ParentTaskID    string     `json:"parent_task_id,omitempty" example:"550e8400-e29b-41d4-a716-000000000001"`
+	FixAttemptCount int        `json:"fix_attempt_count,omitempty" example:"1"`
+	HeadSHA         string     `json:"head_sha,omitempty" example:"f00ba2"`
+	CILastPolledAt  *time.Time `json:"ci_last_polled_at,omitempty"`
 }
 
 // TaskDetailResponse includes task details plus recent events.

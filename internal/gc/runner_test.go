@@ -79,6 +79,13 @@ func (r *fakeTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, err
 func (r *fakeTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
 }
+func (r *fakeTaskRepo) ListWatchingIDs(_ context.Context) ([]string, error) { return nil, nil }
+func (r *fakeTaskRepo) FindFixChild(_ context.Context, _, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeTaskRepo) UpdateCIStatus(_ context.Context, _ string, _ domain.CIStatus, _ string, _ time.Time) error {
+	return nil
+}
 
 // fakeGit is a scriptable GitRunner for GC tests.
 type fakeGit struct {
@@ -332,6 +339,13 @@ func (r *errRepo) ClaimNext(context.Context, string) (*domain.Task, error) {
 }
 func (r *errRepo) ReclaimStale(context.Context, time.Time) (int64, error) {
 	return 0, r.err
+}
+func (r *errRepo) ListWatchingIDs(context.Context) ([]string, error) { return nil, r.err }
+func (r *errRepo) FindFixChild(context.Context, string, string) (*domain.Task, error) {
+	return nil, r.err
+}
+func (r *errRepo) UpdateCIStatus(context.Context, string, domain.CIStatus, string, time.Time) error {
+	return r.err
 }
 
 func TestRecoverOrphans_GetRunningErrorIsLoggedNotPanic(t *testing.T) {

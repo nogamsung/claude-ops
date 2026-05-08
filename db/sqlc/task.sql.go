@@ -52,6 +52,30 @@ func (q *Queries) ClaimNextTask(ctx context.Context, workerID sql.NullString) (i
 	return result.RowsAffected()
 }
 
+const findFixChildTaskID = `-- name: FindFixChildTaskID :one
+SELECT id
+FROM tasks
+WHERE task_type = 'ci-fix'
+  AND parent_task_id = ?
+  AND head_sha       = ?
+LIMIT 1
+`
+
+type FindFixChildTaskIDParams struct {
+	ParentTaskID sql.NullString `json:"parent_task_id"`
+	HeadSha      string         `json:"head_sha"`
+}
+
+// Looks up the existing ci-fix child task for a given (parent, head_sha)
+// pair. Returns ErrNoRows when no duplicate exists, which the caller treats
+// as "free to enqueue".
+func (q *Queries) FindFixChildTaskID(ctx context.Context, arg FindFixChildTaskIDParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, findFixChildTaskID, arg.ParentTaskID, arg.HeadSha)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getClaimedTaskID = `-- name: GetClaimedTaskID :one
 SELECT id
 FROM tasks
@@ -68,6 +92,40 @@ func (q *Queries) GetClaimedTaskID(ctx context.Context, workerID sql.NullString)
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listWatchingTaskIDs = `-- name: ListWatchingTaskIDs :many
+SELECT id
+FROM tasks
+WHERE ci_status = 'watching'
+ORDER BY ci_last_polled_at IS NULL DESC,  -- never-polled first
+         ci_last_polled_at ASC
+`
+
+// Returns IDs of tasks the CI watcher should poll. Used by the watcher tick
+// so it can refresh state by calling repo.GetByID, keeping the loaded *Task
+// mapping in one place (the GORM repository).
+func (q *Queries) ListWatchingTaskIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listWatchingTaskIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const reclaimStaleTasks = `-- name: ReclaimStaleTasks :execrows
@@ -89,4 +147,32 @@ func (q *Queries) ReclaimStaleTasks(ctx context.Context, cutoff sql.NullTime) (i
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const updateTaskCIStatus = `-- name: UpdateTaskCIStatus :exec
+UPDATE tasks
+SET ci_status         = ?,
+    head_sha          = ?,
+    ci_last_polled_at = ?,
+    updated_at        = NOW(3)
+WHERE id = ?
+`
+
+type UpdateTaskCIStatusParams struct {
+	CiStatus       string       `json:"ci_status"`
+	HeadSha        string       `json:"head_sha"`
+	CiLastPolledAt sql.NullTime `json:"ci_last_polled_at"`
+	ID             string       `json:"id"`
+}
+
+// Targeted update used by the CI watcher to advance ci_status / head_sha /
+// ci_last_polled_at without touching the rest of the row.
+func (q *Queries) UpdateTaskCIStatus(ctx context.Context, arg UpdateTaskCIStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateTaskCIStatus,
+		arg.CiStatus,
+		arg.HeadSha,
+		arg.CiLastPolledAt,
+		arg.ID,
+	)
+	return err
 }

@@ -15,9 +15,27 @@ type Config struct {
 	Runtime     RuntimeConfig     `mapstructure:"runtime"`
 	Scheduler   SchedulerConfig   `mapstructure:"scheduler"`
 	Concurrency ConcurrencyConfig `mapstructure:"concurrency"`
+	CIFix       CIFixConfig       `mapstructure:"ci_fix"`
 	Limits      LimitsConfig      `mapstructure:"limits"`
 	GitHub      GitHubConfig      `mapstructure:"github"`
 	Slack       SlackConfig       `mapstructure:"slack"`
+}
+
+// CIFixConfig controls the post-PR CI watcher loop. When Enabled is false
+// the watcher does nothing and worker behavior is byte-for-byte identical
+// to v1 (worktree GC + markDone clean-up runs immediately).
+//
+// MaxAttempts caps the parent→child fix-chain length. PollInterval drives
+// `gh pr checks` polling cadence; PollTimeout abandons watching when
+// checks never reach a terminal state. The dedup rule (migrations/000007
+// ci_fix_dedup_key UNIQUE) guarantees at most one ci-fix child per
+// (parent, head_sha) regardless of poll frequency.
+type CIFixConfig struct {
+	Enabled             bool          `mapstructure:"enabled"`
+	MaxAttempts         int           `mapstructure:"max_attempts"`
+	PollInterval        time.Duration `mapstructure:"poll_interval"`
+	PollTimeout         time.Duration `mapstructure:"poll_timeout"`
+	CommentOnExhaustion bool          `mapstructure:"comment_on_exhaustion"`
 }
 
 // ConcurrencyConfig controls the parallel-tasks worker pool. The default
@@ -170,6 +188,11 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("concurrency.max_parallel_tasks", 1) // v1 byte-compat default
 	v.SetDefault("concurrency.lease_timeout", "60m")
 	v.SetDefault("concurrency.reclaim_interval", "10m")
+	v.SetDefault("ci_fix.enabled", false) // opt-in until operator validates
+	v.SetDefault("ci_fix.max_attempts", 2)
+	v.SetDefault("ci_fix.poll_interval", "60s")
+	v.SetDefault("ci_fix.poll_timeout", "30m")
+	v.SetDefault("ci_fix.comment_on_exhaustion", true)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config %q: %w", path, err)

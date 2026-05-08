@@ -43,6 +43,11 @@ type gormTask struct {
 	ModelUsageJSON           string     `gorm:"column:model_usage_json"`
 	WorkerID                 *string    `gorm:"column:worker_id"`
 	ClaimedAt                *time.Time `gorm:"column:claimed_at"`
+	ParentTaskID             *string    `gorm:"column:parent_task_id"`
+	FixAttemptCount          int        `gorm:"column:fix_attempt_count"`
+	CIStatus                 string     `gorm:"column:ci_status"`
+	HeadSHA                  string     `gorm:"column:head_sha"`
+	CILastPolledAt           *time.Time `gorm:"column:ci_last_polled_at"`
 }
 
 func (gormTask) TableName() string { return "tasks" }
@@ -85,6 +90,11 @@ func toGORMTask(t *domain.Task) *gormTask {
 		ModelUsageJSON:           modelJSON,
 		WorkerID:                 t.WorkerID,
 		ClaimedAt:                t.ClaimedAt,
+		ParentTaskID:             t.ParentTaskID,
+		FixAttemptCount:          t.FixAttemptCount,
+		CIStatus:                 string(t.CIStatus),
+		HeadSHA:                  t.HeadSHA,
+		CILastPolledAt:           t.CILastPolledAt,
 	}
 }
 
@@ -126,6 +136,11 @@ func toDomainTask(g *gormTask) *domain.Task {
 		ModelUsageJSON:           modelJSON,
 		WorkerID:                 g.WorkerID,
 		ClaimedAt:                g.ClaimedAt,
+		ParentTaskID:             g.ParentTaskID,
+		FixAttemptCount:          g.FixAttemptCount,
+		CIStatus:                 domain.CIStatus(g.CIStatus),
+		HeadSHA:                  g.HeadSHA,
+		CILastPolledAt:           g.CILastPolledAt,
 	}
 }
 
@@ -187,6 +202,9 @@ func (r *GormTaskRepository) List(ctx context.Context, filter domain.TaskFilter)
 	}
 	if filter.Source != nil {
 		query = query.Where("source = ?", string(*filter.Source))
+	}
+	if filter.CIStatus != nil {
+		query = query.Where("ci_status = ?", string(*filter.CIStatus))
 	}
 	if filter.Cursor != "" {
 		query = query.Where("id < ?", filter.Cursor)
@@ -273,4 +291,53 @@ func (r *GormTaskRepository) ReclaimStale(ctx context.Context, cutoff time.Time)
 		return 0, fmt.Errorf("reclaim stale tasks: %w", err)
 	}
 	return rows, nil
+}
+
+// ListWatchingIDs returns IDs of tasks the CI watcher should poll, oldest
+// poll first (NULLs ahead of any timestamp).
+func (r *GormTaskRepository) ListWatchingIDs(ctx context.Context) ([]string, error) {
+	if r.queries == nil {
+		return nil, fmt.Errorf("ListWatchingIDs: sqlc queries not wired")
+	}
+	ids, err := r.queries.ListWatchingTaskIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list watching task ids: %w", err)
+	}
+	return ids, nil
+}
+
+// FindFixChild returns the existing ci-fix child task for a (parent,
+// head_sha) pair, or (nil, nil) when no duplicate exists.
+func (r *GormTaskRepository) FindFixChild(ctx context.Context, parentTaskID, headSHA string) (*domain.Task, error) {
+	if r.queries == nil {
+		return nil, fmt.Errorf("FindFixChild: sqlc queries not wired")
+	}
+	id, err := r.queries.FindFixChildTaskID(ctx, sqlcdb.FindFixChildTaskIDParams{
+		ParentTaskID: sql.NullString{String: parentTaskID, Valid: parentTaskID != ""},
+		HeadSha:      headSHA,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find fix child: %w", err)
+	}
+	return r.GetByID(ctx, id)
+}
+
+// UpdateCIStatus advances the watcher fields without rewriting the rest of
+// the row. status="" is allowed (legacy clear).
+func (r *GormTaskRepository) UpdateCIStatus(ctx context.Context, id string, status domain.CIStatus, headSHA string, polledAt time.Time) error {
+	if r.queries == nil {
+		return fmt.Errorf("UpdateCIStatus: sqlc queries not wired")
+	}
+	if err := r.queries.UpdateTaskCIStatus(ctx, sqlcdb.UpdateTaskCIStatusParams{
+		CiStatus:       string(status),
+		HeadSha:        headSHA,
+		CiLastPolledAt: sql.NullTime{Time: polledAt, Valid: !polledAt.IsZero()},
+		ID:             id,
+	}); err != nil {
+		return fmt.Errorf("update ci status: %w", err)
+	}
+	return nil
 }

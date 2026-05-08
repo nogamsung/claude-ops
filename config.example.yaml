@@ -30,6 +30,20 @@ concurrency:
   # Cadence of the orphan reclaimer. Must be < lease_timeout.
   reclaim_interval: "10m"
 
+ci_fix:
+  # Opt-in until the operator validates with their own CI. When false the
+  # watcher does nothing and worker behavior is identical to v1 (worktree
+  # cleanup runs immediately on markDone).
+  enabled: false
+  # Cap on parent→child fix-chain length (PRD recommends ≤2).
+  max_attempts: 2
+  # Cadence of `gh pr checks` polling once a PR is being watched.
+  poll_interval: "60s"
+  # Abandon watching when checks haven't reached terminal state by this long.
+  poll_timeout: "30m"
+  # When attempts are exhausted, post a single comment on the PR.
+  comment_on_exhaustion: true
+
 limits:
   # Daily 上限. 0 이면 weekly_max_tasks 에서 자동 유도 (ceil(weekly/7)).
   # 둘 다 0 이면 무제한.

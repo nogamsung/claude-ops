@@ -20,9 +20,17 @@ type Querier interface {
 	// The derived-table wrapping is required because MySQL refuses self-reference
 	// in the same UPDATE/SELECT (Error 1093).
 	ClaimNextTask(ctx context.Context, workerID sql.NullString) (int64, error)
+	// Looks up the existing ci-fix child task for a given (parent, head_sha)
+	// pair. Returns ErrNoRows when no duplicate exists, which the caller treats
+	// as "free to enqueue".
+	FindFixChildTaskID(ctx context.Context, arg FindFixChildTaskIDParams) (string, error)
 	// Returns the most recently claimed task for a worker. Used right after
 	// ClaimNextTask reports rowsAffected=1 to load the row.
 	GetClaimedTaskID(ctx context.Context, workerID sql.NullString) (string, error)
+	// Returns IDs of tasks the CI watcher should poll. Used by the watcher tick
+	// so it can refresh state by calling repo.GetByID, keeping the loaded *Task
+	// mapping in one place (the GORM repository).
+	ListWatchingTaskIDs(ctx context.Context) ([]string, error)
 	// Periodic safety net: marks tasks orphaned when their worker died without
 	// clearing the claim. The cutoff is `now - lease_timeout`; rows still being
 	// actively processed have a fresher claimed_at and survive.
@@ -39,6 +47,9 @@ type Querier interface {
 	// Caller resolves the ISO 8601 week boundary in the configured tz and passes
 	// [week_start, week_end) as a half-open range (Monday 00:00 of week N and N+1).
 	SumWeeklyCost(ctx context.Context, arg SumWeeklyCostParams) (float64, error)
+	// Targeted update used by the CI watcher to advance ci_status / head_sha /
+	// ci_last_polled_at without touching the rest of the row.
+	UpdateTaskCIStatus(ctx context.Context, arg UpdateTaskCIStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

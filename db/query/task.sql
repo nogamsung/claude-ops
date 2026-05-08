@@ -51,3 +51,34 @@ SET status     = 'orphaned',
 WHERE status = 'running'
   AND claimed_at IS NOT NULL
   AND claimed_at < sqlc.arg(cutoff);
+
+-- name: ListWatchingTaskIDs :many
+-- Returns IDs of tasks the CI watcher should poll. Used by the watcher tick
+-- so it can refresh state by calling repo.GetByID, keeping the loaded *Task
+-- mapping in one place (the GORM repository).
+SELECT id
+FROM tasks
+WHERE ci_status = 'watching'
+ORDER BY ci_last_polled_at IS NULL DESC,  -- never-polled first
+         ci_last_polled_at ASC;
+
+-- name: FindFixChildTaskID :one
+-- Looks up the existing ci-fix child task for a given (parent, head_sha)
+-- pair. Returns ErrNoRows when no duplicate exists, which the caller treats
+-- as "free to enqueue".
+SELECT id
+FROM tasks
+WHERE task_type = 'ci-fix'
+  AND parent_task_id = sqlc.arg(parent_task_id)
+  AND head_sha       = sqlc.arg(head_sha)
+LIMIT 1;
+
+-- name: UpdateTaskCIStatus :exec
+-- Targeted update used by the CI watcher to advance ci_status / head_sha /
+-- ci_last_polled_at without touching the rest of the row.
+UPDATE tasks
+SET ci_status         = sqlc.arg(ci_status),
+    head_sha          = sqlc.arg(head_sha),
+    ci_last_polled_at = sqlc.arg(ci_last_polled_at),
+    updated_at        = NOW(3)
+WHERE id = sqlc.arg(id);

@@ -72,6 +72,13 @@ func (r *fakeTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, err
 func (r *fakeTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
 }
+func (r *fakeTaskRepo) ListWatchingIDs(_ context.Context) ([]string, error) { return nil, nil }
+func (r *fakeTaskRepo) FindFixChild(_ context.Context, _, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeTaskRepo) UpdateCIStatus(_ context.Context, _ string, _ domain.CIStatus, _ string, _ time.Time) error {
+	return nil
+}
 
 type fakeEventRepo struct{}
 

@@ -160,6 +160,10 @@ func toTaskResponse(t *domain.Task) TaskResponse {
 	if src == "" {
 		src = string(domain.TaskSourceGitHubIssue)
 	}
+	parent := ""
+	if t.ParentTaskID != nil {
+		parent = *t.ParentTaskID
+	}
 	return TaskResponse{
 		ID:                    t.ID,
 		RepoFullName:          t.RepoFullName,
@@ -177,5 +181,10 @@ func toTaskResponse(t *domain.Task) TaskResponse {
 		EstimatedOutputTokens: t.EstimatedOutputTokens,
 		CreatedAt:             t.CreatedAt,
 		UpdatedAt:             t.UpdatedAt,
+		CIStatus:              string(t.CIStatus),
+		ParentTaskID:          parent,
+		FixAttemptCount:       t.FixAttemptCount,
+		HeadSHA:               t.HeadSHA,
+		CILastPolledAt:        t.CILastPolledAt,
 	}
 }

@@ -7,10 +7,11 @@ import (
 
 // TaskFilter contains optional filters for listing tasks.
 type TaskFilter struct {
-	Status *TaskStatus
-	Source *TaskSource
-	Limit  int
-	Cursor string // opaque cursor (task ID for keyset pagination)
+	Status   *TaskStatus
+	Source   *TaskSource
+	CIStatus *CIStatus
+	Limit    int
+	Cursor   string // opaque cursor (task ID for keyset pagination)
 }
 
 // TaskRepository defines storage operations for Task entities.
@@ -34,6 +35,19 @@ type TaskRepository interface {
 	// Returns the number of rows reclaimed. Called periodically by the
 	// scheduler to recover after a crashed worker.
 	ReclaimStale(ctx context.Context, cutoff time.Time) (int64, error)
+
+	// ListWatchingIDs returns task IDs whose CI watcher is active. Sorted
+	// least-recently-polled first so the watcher loop processes oldest first.
+	ListWatchingIDs(ctx context.Context) ([]string, error)
+
+	// FindFixChild returns the existing ci-fix child task for a (parent,
+	// head_sha) dedup key, or (nil, nil) when none exists. Used by the
+	// watcher to decide whether enqueueing a fix would be a duplicate.
+	FindFixChild(ctx context.Context, parentTaskID, headSHA string) (*Task, error)
+
+	// UpdateCIStatus is a targeted update used by the watcher to advance
+	// ci_status / head_sha / ci_last_polled_at without rewriting the row.
+	UpdateCIStatus(ctx context.Context, id string, status CIStatus, headSHA string, polledAt time.Time) error
 }
 
 // TaskEventRepository defines storage operations for TaskEvent entities.

@@ -143,6 +143,49 @@ func (uc *TaskUseCase) EnqueueFromIssue(ctx context.Context, req EnqueueRequest)
 	return task, nil
 }
 
+// FixTaskInput carries the fix-chain inputs the CI watcher feeds into a
+// freshly-enqueued ci-fix task. PromptTemplate is the rendered prompt
+// (with FailedStep / LogTail / PreviousAttempts already substituted) so
+// the worker can pass it to claude verbatim.
+type FixTaskInput struct {
+	Parent         *domain.Task
+	HeadSHA        string
+	FailedStep     string
+	PromptTemplate string
+}
+
+// EnqueueFixTask creates a ci-fix child of `in.Parent`. The watcher is the
+// only caller; it has already verified MaxAttempts and ran FindFixChild
+// for dedup. The DB UNIQUE index on (parent_task_id, head_sha) is the
+// last-line defense and surfaces as an error if the watcher races itself.
+func (uc *TaskUseCase) EnqueueFixTask(ctx context.Context, in FixTaskInput) (*domain.Task, error) {
+	if in.Parent == nil {
+		return nil, fmt.Errorf("EnqueueFixTask: parent required")
+	}
+	parentID := in.Parent.ID
+	now := uc.clock.Now()
+	task := &domain.Task{
+		ID:              uuid.New().String(),
+		RepoFullName:    in.Parent.RepoFullName,
+		IssueNumber:     in.Parent.IssueNumber,
+		IssueTitle:      in.Parent.IssueTitle,
+		TaskType:        domain.TaskTypeCIFix,
+		Status:          domain.TaskStatusQueued,
+		Source:          in.Parent.Source,
+		PromptTemplate:  in.PromptTemplate,
+		WorktreePath:    in.Parent.WorktreePath, // reused — see PRD §6.3
+		ParentTaskID:    &parentID,
+		FixAttemptCount: in.Parent.FixAttemptCount + 1,
+		HeadSHA:         in.HeadSHA,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := uc.taskRepo.Create(ctx, task); err != nil {
+		return nil, fmt.Errorf("create fix task: %w", err)
+	}
+	return task, nil
+}
+
 // GetTask returns a task with its recent events.
 func (uc *TaskUseCase) GetTask(ctx context.Context, id string) (*TaskDetail, error) {
 	task, err := uc.taskRepo.GetByID(ctx, id)

@@ -45,7 +45,7 @@ vim .env
 # DSN 예: claude_ops:secret@tcp(127.0.0.1:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC
 
 cp config.example.yaml config.yaml
-vim config.yaml  # active_windows, repos, concurrency.max_parallel_tasks (기본 1)
+vim config.yaml  # active_windows, repos, concurrency.max_parallel_tasks (기본 1), ci_fix.enabled (기본 false)
 
 make run                     # 또는: ./bin/claude-ops -config config.yaml
 ```

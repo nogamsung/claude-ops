@@ -101,6 +101,15 @@ func (r *preloadedTaskRepo) ClaimNext(_ context.Context, workerID string) (*doma
 func (r *preloadedTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
 }
+func (r *preloadedTaskRepo) ListWatchingIDs(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+func (r *preloadedTaskRepo) FindFixChild(_ context.Context, _, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *preloadedTaskRepo) UpdateCIStatus(_ context.Context, _ string, _ domain.CIStatus, _ string, _ time.Time) error {
+	return nil
+}
 
 // TestE2E_OutsideWindow_ZeroClaudeInvocations verifies that when the clock
 // is outside the active time window and full-mode is off, the worker
