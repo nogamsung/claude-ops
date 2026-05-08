@@ -72,7 +72,30 @@ func (r *preloadedTaskRepo) GetRunning(_ context.Context) ([]*domain.Task, error
 func (r *preloadedTaskRepo) ExistsByRepoAndIssue(_ context.Context, _ string, _ int) (bool, error) {
 	return false, nil
 }
-func (r *preloadedTaskRepo) ClaimNext(_ context.Context, _ string) (*domain.Task, error) {
+func (r *preloadedTaskRepo) ClaimNext(_ context.Context, workerID string) (*domain.Task, error) {
+	// Mirror the real Gorm impl: pick the oldest queued task whose repo has no
+	// running task and flip it to running with the worker_id stamped.
+	for _, t := range r.tasks {
+		if t.Status != domain.TaskStatusQueued {
+			continue
+		}
+		busy := false
+		for _, other := range r.tasks {
+			if other.Status == domain.TaskStatusRunning && other.RepoFullName == t.RepoFullName {
+				busy = true
+				break
+			}
+		}
+		if busy {
+			continue
+		}
+		t.Status = domain.TaskStatusRunning
+		wid := workerID
+		t.WorkerID = &wid
+		now := time.Now()
+		t.ClaimedAt = &now
+		return t, nil
+	}
 	return nil, nil
 }
 func (r *preloadedTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {

@@ -42,10 +42,17 @@ type Scheduler struct {
 
 	tickInterval time.Duration
 
-	// semaphore limits concurrent tasks to 1 (v1 serial execution).
+	// workerID identifies this scheduler instance; written into tasks.worker_id
+	// by ClaimNext so the periodic reclaimer can attribute orphan rows.
+	workerID string
+
+	// sem caps the number of in-flight worker goroutines. Buffer = N
+	// (cfg.MaxParallelTasks); N=1 reproduces v1 serial behavior exactly.
 	sem chan struct{}
 
 	// cancelMap maps taskID -> context cancel fn for running tasks.
+	// CancelTask uses it for explicit /tasks/{id}/stop signals; graceful
+	// shutdown is fan-out via the parent ctx the worker derives from.
 	mu        sync.Mutex
 	cancelMap map[string]context.CancelFunc
 
@@ -55,14 +62,16 @@ type Scheduler struct {
 
 // Config holds constructor parameters for the Scheduler.
 type Config struct {
-	Clock        Clock
-	Windows      []*domain.ActiveWindow
-	TaskRepo     domain.TaskRepository
-	AppStateRepo domain.AppStateRepository
-	Poller       Poller
-	Worker       WorkerRunner
-	BudgetGate   BudgetGate
-	TickInterval time.Duration
+	Clock            Clock
+	Windows          []*domain.ActiveWindow
+	TaskRepo         domain.TaskRepository
+	AppStateRepo     domain.AppStateRepository
+	Poller           Poller
+	Worker           WorkerRunner
+	BudgetGate       BudgetGate
+	TickInterval     time.Duration
+	WorkerID         string // opaque instance token (e.g. "host-pid"); empty disables ClaimNext attribution
+	MaxParallelTasks int    // 1 = v1 byte-for-byte. Capped at 10 by config validation.
 }
 
 // New creates a new Scheduler.
@@ -73,6 +82,9 @@ func New(cfg Config) *Scheduler {
 	if cfg.TickInterval <= 0 {
 		cfg.TickInterval = 30 * time.Second
 	}
+	if cfg.MaxParallelTasks < 1 {
+		cfg.MaxParallelTasks = 1
+	}
 	return &Scheduler{
 		clock:        cfg.Clock,
 		windows:      cfg.Windows,
@@ -82,7 +94,8 @@ func New(cfg Config) *Scheduler {
 		worker:       cfg.Worker,
 		budgetGate:   cfg.BudgetGate,
 		tickInterval: cfg.TickInterval,
-		sem:          make(chan struct{}, 1),
+		workerID:     cfg.WorkerID,
+		sem:          make(chan struct{}, cfg.MaxParallelTasks),
 		cancelMap:    make(map[string]context.CancelFunc),
 		stopCh:       make(chan struct{}),
 	}
@@ -157,36 +170,39 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 	}
 
-	// Dispatch a queued task if the semaphore is free.
-	select {
-	case s.sem <- struct{}{}:
-		// Acquired semaphore — try to dispatch.
-		dispatched := s.dispatch(ctx)
-		if !dispatched {
-			<-s.sem // Release immediately if nothing to run.
+	// Fill every empty slot in this tick — relevant when MaxParallelTasks > 1
+	// or when a slot just freed up. Each iteration first reserves a slot
+	// (non-blocking), then asks the repository to atomically claim a task
+	// whose repo has no in-flight work; loop exits on full slots or empty queue.
+	for {
+		select {
+		case s.sem <- struct{}{}:
+			dispatched := s.dispatchOne(ctx)
+			if !dispatched {
+				<-s.sem
+				return
+			}
+		default:
+			slog.Debug("scheduler: all worker slots busy")
+			return
 		}
-	default:
-		slog.Debug("scheduler: worker slot busy, skipping dispatch")
 	}
 }
 
-// dispatch picks the oldest queued task and starts the worker.
-// Returns true if a task was dispatched.
-func (s *Scheduler) dispatch(ctx context.Context) bool {
-	status := domain.TaskStatusQueued
-	tasks, err := s.taskRepo.List(ctx, domain.TaskFilter{
-		Status: &status,
-		Limit:  1,
-	})
+// dispatchOne atomically claims one task via ClaimNext (FOR UPDATE SKIP LOCKED
+// + per-repo NOT EXISTS) and spawns a worker for it. Caller must already hold
+// a slot in s.sem. Returns false when no eligible row was claimed (queue
+// empty or every queued repo already has a running task).
+func (s *Scheduler) dispatchOne(ctx context.Context) bool {
+	task, err := s.taskRepo.ClaimNext(ctx, s.workerID)
 	if err != nil {
-		slog.Error("scheduler: list queued tasks", "err", err)
+		slog.Error("scheduler: claim next task", "err", err)
 		return false
 	}
-	if len(tasks) == 0 {
+	if task == nil {
 		return false
 	}
 
-	task := tasks[0]
 	taskCtx, cancel := context.WithCancel(ctx)
 
 	s.mu.Lock()
@@ -204,7 +220,8 @@ func (s *Scheduler) dispatch(ctx context.Context) bool {
 			s.mu.Unlock()
 		}()
 
-		slog.Info("scheduler: dispatching task", "task_id", task.ID, "repo", task.RepoFullName, "issue", task.IssueNumber)
+		slog.Info("scheduler: dispatching task",
+			"task_id", task.ID, "repo", task.RepoFullName, "issue", task.IssueNumber, "worker_id", s.workerID)
 		if err := s.worker.RunTask(taskCtx, task); err != nil {
 			slog.Error("scheduler: worker error", "task_id", task.ID, "err", err)
 		}

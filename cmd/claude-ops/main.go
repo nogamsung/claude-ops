@@ -214,15 +214,25 @@ func run() error {
 	}
 	worker := scheduler.NewWorker(workerCfg)
 
-	// Scheduler.
+	// Scheduler — workerID identifies this instance for ClaimNext attribution
+	// and lease reclaim. Single-instance v1.1 uses host-pid; multi-instance
+	// deployments need a stable per-instance value (out of scope for now).
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	workerID := fmt.Sprintf("%s-%d", hostname, os.Getpid())
+
 	sched := scheduler.New(scheduler.Config{
-		Windows:      windows,
-		TaskRepo:     taskRepo,
-		AppStateRepo: appStateRepo,
-		Poller:       poller,
-		Worker:       worker,
-		BudgetGate:   budgetUC,
-		TickInterval: cfg.Runtime.TickInterval,
+		Windows:          windows,
+		TaskRepo:         taskRepo,
+		AppStateRepo:     appStateRepo,
+		Poller:           poller,
+		Worker:           worker,
+		BudgetGate:       budgetUC,
+		TickInterval:     cfg.Runtime.TickInterval,
+		WorkerID:         workerID,
+		MaxParallelTasks: cfg.Concurrency.MaxParallelTasks,
 	})
 
 	// WindowGate adapter for TaskUseCase (C1 fix: inject window gate so EnqueueFromIssue checks correctly).
