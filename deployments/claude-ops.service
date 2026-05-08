@@ -1,6 +1,9 @@
 [Unit]
 Description=Claude Ops — GitHub issue to PR automation
-After=network.target
+# Wait for the local MySQL service before starting. If you run MySQL on a
+# different host or in Docker, drop or replace this dependency.
+After=network.target mysqld.service
+Wants=mysqld.service
 Documentation=https://github.com/gs97ahn/claude-ops
 
 [Service]
@@ -8,6 +11,8 @@ Type=simple
 User=<REPLACE_WITH_OPERATOR_USER>
 Group=<REPLACE_WITH_OPERATOR_GROUP>
 WorkingDirectory=/srv/claude-ops
+# /etc/claude-ops/.env must define MYSQL_DSN (e.g.
+# MYSQL_DSN=claude_ops:secret@tcp(127.0.0.1:3306)/claude_ops?parseTime=true&charset=utf8mb4&loc=UTC).
 EnvironmentFile=/etc/claude-ops/.env
 ExecStart=/usr/local/bin/claude-ops -config /etc/claude-ops/config.yaml
 Restart=on-failure
@@ -22,7 +27,6 @@ TimeoutStopSec=30s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/srv/claude-ops/data
 ReadWritePaths=/srv/claude-ops/.worktrees
 
 [Install]

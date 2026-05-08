@@ -50,12 +50,13 @@ jobs:
       - name: Download modules
         run: go mod download
 
-      # CGO_ENABLED=1 required: mattn/go-sqlite3 uses cgo
-      - name: Install CGO dependencies
-        run: sudo apt-get install -y gcc libsqlite3-dev
+      # Pre-pull mysql:8.0 so testcontainers tests don't pay the pull cost
+      # under the per-test timeout. ubuntu-latest runners ship with Docker.
+      - name: Pre-pull MySQL image for testcontainers
+        run: docker pull mysql:8.0
 
       - name: Run tests with race detector
-        run: CGO_ENABLED=1 go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Coverage summary (Job Summary)
         run: |
@@ -95,15 +96,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install CGO dependencies
-        run: sudo apt-get install -y gcc libsqlite3-dev
-
       - name: Build all packages
-        run: CGO_ENABLED=1 go build ./...
+        run: CGO_ENABLED=0 go build ./...
 
       - name: Build binary
         run: |
-          CGO_ENABLED=1 go build \
+          CGO_ENABLED=0 go build \
             -ldflags="-s -w" \
             -o bin/claude-ops \
             ./cmd/claude-ops/
