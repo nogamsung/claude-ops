@@ -23,12 +23,31 @@ const (
 // TaskType represents the category of work a task performs.
 type TaskType string
 
-// TaskTypeFeature, TaskTypeSecurity, and TaskTypePerf enumerate the kinds of
-// work a task can perform.
+// TaskTypeFeature, TaskTypeSecurity, TaskTypePerf, and TaskTypeCIFix
+// enumerate the kinds of work a task can perform. TaskTypeCIFix is a
+// follow-up auto-spawned by the CI watcher when a PR's checks fail.
 const (
 	TaskTypeFeature  TaskType = "feature"
 	TaskTypeSecurity TaskType = "security"
 	TaskTypePerf     TaskType = "perf"
+	TaskTypeCIFix    TaskType = "ci-fix"
+)
+
+// CIStatus tracks the CI watcher state for a task. Empty means "not
+// watched" (legacy row, ci-fix disabled, or PR creation never succeeded).
+type CIStatus string
+
+// CIStatus enum.
+const (
+	CIStatusEmpty     CIStatus = ""
+	CIStatusPending   CIStatus = "pending"
+	CIStatusWatching  CIStatus = "watching"
+	CIStatusPassed    CIStatus = "passed"
+	CIStatusFailed    CIStatus = "failed"
+	CIStatusExhausted CIStatus = "exhausted"
+	CIStatusTimeout   CIStatus = "timeout"
+	CIStatusStuck     CIStatus = "stuck"
+	CIStatusClosed    CIStatus = "closed"
 )
 
 // TaskSource identifies how a task was created.
@@ -74,6 +93,17 @@ type Task struct {
 	// flipped it to running. Both are nil for queued/terminal rows.
 	WorkerID  *string
 	ClaimedAt *time.Time
+
+	// CI-fix loop state (ci-fix-loop). ParentTaskID forms the parent→child
+	// fix-chain; FixAttemptCount is incremented per chain link and capped by
+	// config.CIFixConfig.MaxAttempts. CIStatus tracks the watcher lifecycle
+	// for the PR this task created. HeadSHA + (ParentTaskID, HeadSHA) is the
+	// dedup key for fix tasks. CILastPolledAt is informational.
+	ParentTaskID    *string
+	FixAttemptCount int
+	CIStatus        CIStatus
+	HeadSHA         string
+	CILastPolledAt  *time.Time
 }
 
 // EventKind is the type of a task lifecycle event.
@@ -89,6 +119,11 @@ const (
 	EventKindUsageWarning      EventKind = "usage_warning"
 	EventKindPRCreated         EventKind = "pr_created"
 	EventKindFailed            EventKind = "failed"
+	// ci-fix-loop lifecycle events.
+	EventKindCICheckPolled     EventKind = "ci_check_polled"
+	EventKindCIFailureDetected EventKind = "ci_failure_detected"
+	EventKindCIFixEnqueued     EventKind = "ci_fix_enqueued"
+	EventKindCIFixExhausted    EventKind = "ci_fix_exhausted"
 )
 
 // TaskEvent records a single event in a task's lifecycle.

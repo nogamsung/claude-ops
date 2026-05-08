@@ -40,6 +40,13 @@ func (s *reclaimSpy) ExistsByRepoAndIssue(context.Context, string, int) (bool, e
 func (s *reclaimSpy) ClaimNext(context.Context, string) (*domain.Task, error) {
 	return nil, nil
 }
+func (s *reclaimSpy) ListWatchingIDs(context.Context) ([]string, error) { return nil, nil }
+func (s *reclaimSpy) FindFixChild(context.Context, string, string) (*domain.Task, error) {
+	return nil, nil
+}
+func (s *reclaimSpy) UpdateCIStatus(context.Context, string, domain.CIStatus, string, time.Time) error {
+	return nil
+}
 
 func TestReclaimer_TicksUntilCancel(t *testing.T) {
 	t.Parallel()

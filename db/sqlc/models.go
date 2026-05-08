@@ -45,6 +45,12 @@ type Task struct {
 	ModelUsageJson           json.RawMessage `json:"model_usage_json"`
 	WorkerID                 sql.NullString  `json:"worker_id"`
 	ClaimedAt                sql.NullTime    `json:"claimed_at"`
+	ParentTaskID             sql.NullString  `json:"parent_task_id"`
+	FixAttemptCount          int32           `json:"fix_attempt_count"`
+	CiStatus                 string          `json:"ci_status"`
+	HeadSha                  string          `json:"head_sha"`
+	CiLastPolledAt           sql.NullTime    `json:"ci_last_polled_at"`
+	CiFixDedupKey            sql.NullString  `json:"ci_fix_dedup_key"`
 }
 
 type TaskEvent struct {

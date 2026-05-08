@@ -40,6 +40,15 @@ func (r *fakeMaintenanceTaskRepo) ClaimNext(_ context.Context, _ string) (*domai
 func (r *fakeMaintenanceTaskRepo) ReclaimStale(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
 }
+func (r *fakeMaintenanceTaskRepo) ListWatchingIDs(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+func (r *fakeMaintenanceTaskRepo) FindFixChild(_ context.Context, _, _ string) (*domain.Task, error) {
+	return nil, nil
+}
+func (r *fakeMaintenanceTaskRepo) UpdateCIStatus(_ context.Context, _ string, _ domain.CIStatus, _ string, _ time.Time) error {
+	return nil
+}
 
 type fakeMaintenanceAppStateRepo struct {
 	states map[string]*domain.AppState
