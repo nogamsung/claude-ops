@@ -15,7 +15,7 @@
 
 본 PR 의 머지 내역:
 
-- `migrations/000007_add_ci_fix_columns_to_tasks` — `parent_task_id` (FK self-ref ON DELETE SET NULL), `fix_attempt_count`, `ci_status` (CHECK enum), `head_sha`, `ci_last_polled_at`. 같이 status enum 에 `'orphaned'` 추가 (parallel-tasks PR 의 잠재 버그 해소).
+- `migrations/000007_add_ci_fix_columns_to_tasks` — `parent_task_id` (CHAR(36) NULL; **plain column, no FK** — MySQL 8.0 + golang-migrate consistently 1215'd on the self-ref FK regardless of ALTER splitting; the parent/child invariant is maintained in `usecase.EnqueueFixTask`), `fix_attempt_count`, `ci_status` (CHECK enum), `head_sha`, `ci_last_polled_at`. 같이 status enum 에 `'orphaned'` 추가 (parallel-tasks PR 의 잠재 버그 해소).
 - `tasks.ci_fix_dedup_key` STORED generated column + UNIQUE 인덱스 — `(parent, head_sha)` 부분-유니크를 MySQL 에서 NULL 이용해 구현.
 - `db/query/task.sql` — `ListWatchingTaskIDs`, `FindFixChildTaskID`, `UpdateTaskCIStatus`. domain.TaskRepository 에 같은 시그니처로 노출.
 - `internal/ci` 패키지 신설:

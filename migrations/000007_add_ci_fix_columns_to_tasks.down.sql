@@ -11,7 +11,6 @@ ALTER TABLE tasks
     DROP CONSTRAINT chk_tasks_task_type,
     ADD CONSTRAINT chk_tasks_task_type
         CHECK (task_type IN ('feature', 'security', 'perf')),
-    DROP FOREIGN KEY fk_tasks_parent,
     DROP COLUMN ci_last_polled_at,
     DROP COLUMN head_sha,
     DROP COLUMN ci_status,

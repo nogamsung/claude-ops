@@ -3,12 +3,17 @@
 -- constraints for the new task_type ('ci-fix') and status ('orphaned',
 -- which is already used by Reclaimer but was missing from the original
 -- enum and would have errored on production INSERT).
+--
+-- Note on parent_task_id: a self-referential FOREIGN KEY was originally
+-- planned (PRD §7), but MySQL 8.0 + golang-migrate consistently fails
+-- with Error 1215 ("Cannot add foreign key constraint") on a fresh DB
+-- when the FK is added in the same migration as the column it
+-- references — even when split into multiple ALTERs. The constraint
+-- offered no behavior we couldn't enforce in application code (we never
+-- delete tasks; ON DELETE SET NULL semantics are not exercised), so the
+-- column is plain CHAR(36) NULL and the parent/child invariant is
+-- maintained by usecase.TaskUseCase.EnqueueFixTask.
 
--- Step 1: columns + CHECK constraint updates. Self-ref FK is added in
--- step 2 because MySQL InnoDB occasionally returns Error 1215 ("Cannot
--- add foreign key constraint") when a self-referential FK is introduced
--- in the same ALTER as the column it references — splitting into two
--- ALTERs lets the engine commit the column metadata first.
 ALTER TABLE tasks
     ADD COLUMN parent_task_id     CHAR(36)    NULL,
     ADD COLUMN fix_attempt_count  INT         NOT NULL DEFAULT 0,
@@ -25,14 +30,9 @@ ALTER TABLE tasks
         CHECK (ci_status IN ('', 'pending', 'watching', 'passed', 'failed',
                              'exhausted', 'timeout', 'stuck', 'closed'));
 
--- Step 2: self-ref FK now that parent_task_id exists.
-ALTER TABLE tasks
-    ADD CONSTRAINT fk_tasks_parent
-        FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE SET NULL;
-
--- Step 3: dedup key for fix tasks. STORED generated column whose value
--- is NULL for non-ci-fix rows (NULLs do not collide in UNIQUE indexes),
--- emulating partial-index semantics that MySQL lacks.
+-- Dedup key for fix tasks. STORED generated column whose value is NULL
+-- for non-ci-fix rows (NULLs do not collide in UNIQUE indexes), emulating
+-- partial-index semantics that MySQL lacks.
 ALTER TABLE tasks
     ADD COLUMN ci_fix_dedup_key VARCHAR(83) GENERATED ALWAYS AS (
         CASE WHEN task_type = 'ci-fix'
