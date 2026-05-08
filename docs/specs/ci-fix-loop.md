@@ -2,12 +2,38 @@
 
 | 항목 | 값 |
 |------|-----|
-| 작성일 | 2026-04-27 |
-| 상태 | draft |
-| 스택 범위 | Go (단일 바이너리, scheduled-dev-agent 의 후속 모듈) |
+| 작성일 | 2026-04-27 (구현 머지: 2026-05-08, default `ci_fix.enabled=false` 로 v1 호환 유지) |
+| 상태 | shipped (foundation) — 운영자가 enabled=true 로 켤 때만 watcher 가 동작 |
+| 스택 범위 | Go (단일 바이너리, claude-ops 의 후속 모듈) |
 | 우선순위 | P1 |
 | 작성자 | gs97ahn@gmail.com |
-| 모 PRD | [`./scheduled-dev-agent.md`](./scheduled-dev-agent.md) |
+| 모 PRD | [`./claude-ops.md`](./claude-ops.md) |
+
+---
+
+## 0. 구현 요약 (2026-05-08)
+
+본 PR 의 머지 내역:
+
+- `migrations/000007_add_ci_fix_columns_to_tasks` — `parent_task_id` (FK self-ref ON DELETE SET NULL), `fix_attempt_count`, `ci_status` (CHECK enum), `head_sha`, `ci_last_polled_at`. 같이 status enum 에 `'orphaned'` 추가 (parallel-tasks PR 의 잠재 버그 해소).
+- `tasks.ci_fix_dedup_key` STORED generated column + UNIQUE 인덱스 — `(parent, head_sha)` 부분-유니크를 MySQL 에서 NULL 이용해 구현.
+- `db/query/task.sql` — `ListWatchingTaskIDs`, `FindFixChildTaskID`, `UpdateTaskCIStatus`. domain.TaskRepository 에 같은 시그니처로 노출.
+- `internal/ci` 패키지 신설:
+  - `checks.go` — CheckRun 구조 + `AggregateConclusion` (PRD §6.1 step 5 의 decision tree)
+  - `mask.go` — `MaskSecrets` (5개 패턴) + `TruncateLogTail` (200줄 + `[truncated N earlier lines]` 마커)
+  - `watcher.go` — `Watcher.Start/tick`, `gh pr view/checks/run-view-log-failed/pr-comment` 호출, dedup + max-attempts + lease-timeout 가드, TaskEvent 4종 기록
+  - `prompt.go` — `FilePromptRenderer` (text/template 1회 로드)
+- `prompts/ci-fix.tmpl` — `{{.PRNumber}} / .FailedStep / .LogTail / .PreviousAttempts / .HeadSHA}}` 바인딩, push/PR-create 금지 가드, CHANGES/ROOT_CAUSE/VERIFY_LOCALLY 트레일러 강제.
+- `internal/usecase.TaskUseCase.EnqueueFixTask(ctx, FixTaskInput)` — 부모 worktree 재사용, FixAttemptCount = parent+1.
+- `internal/scheduler.WorkerConfig.CIFixEnabled` — markDone 후 PR 이 있고 task_type ≠ ci-fix 면 `ci_status='watching'` 으로 flip + worktree 보존. ci-fix 자식은 그대로 cleanup.
+- `internal/config.CIFixConfig{Enabled, MaxAttempts, PollInterval, PollTimeout, CommentOnExhaustion}` — defaults `false / 2 / 60s / 30m / true`. validate cap MaxAttempts ≤5, poll_interval < poll_timeout.
+- `cmd/claude-ops/main.go` — config 와이어링 + watcher 시작 + 어댑터 3종 (`ciFixEnqueuerAdapter`, `ciSlackAdapter` 로그-only stub, `ciClockAdapter`).
+- API: `TaskResponse` 에 ci_status / parent_task_id / fix_attempt_count / head_sha / ci_last_polled_at 추가. `TaskFilter.CIStatus` 로 List 필터.
+
+**default `ci_fix.enabled=false`** — 켜기 전까지 worker 동작은 v1 과 바이트 동일. 켤 때 운영자 책임:
+1. `prompts/ci-fix.tmpl` 가 worktree 안에 존재해야 함 (cmd/main 이 시작 시 fail-fast).
+2. Slack 메시지는 현재 stub (slog only). Block Kit builder 는 별도 PR.
+3. `/modes/ci-fix` 런타임 토글 endpoint (PRD US-7) 는 별도 PR — 본 PR 은 config-only.
 
 ---
 

@@ -86,6 +86,9 @@ mockery --name=<Interface> --dir=internal/domain --output=mocks
 ### 2026-05-08 — parallel-tasks 토대 머지 (default `max_parallel_tasks=1`)
 Worker pickup 은 `taskRepo.ClaimNext` (sqlc + MySQL `FOR UPDATE SKIP LOCKED` + 같은 레포 직렬화용 `NOT EXISTS`) 로 race-free atomic. 같은 레포 동시 처리 차단은 SQL 레이어가 책임 — 새 worker pool 코드에 in-memory `sync.Map[repo]*Mutex` 추가 금지. lease 만료 task 회수는 `scheduler.Reclaimer` (default 10m 간격, 60m lease). `concurrency.max_parallel_tasks` 를 2/3 으로 올릴 때만 병렬 코드 경로가 활성화.
 
+### 2026-05-08 — ci-fix-loop 토대 머지 (default `ci_fix.enabled=false`)
+PR 생성 후 CI 결과를 polling 하는 `internal/ci.Watcher` 추가. `(parent_task_id, head_sha)` UNIQUE (MySQL STORED generated column) 로 fix task 중복을 DB 레이어가 막고 `MaxAttempts` 체인 캡으로 무한 루프 차단. Log tail 은 항상 `ci.MaskSecrets` + 200줄 `ci.TruncateLogTail` 거쳐서 prompt 에 들어감 — 직접 `gh run view` 출력을 prompt 에 넣지 말 것. ci-fix task 의 worktree 는 부모와 동일 path 재사용 (markDone 시 보존, watcher 가 종결 후 정리). `ci_fix.enabled=false` 가 default 라 켜기 전까지 worker 동작은 v1 과 동일.
+
 <!-- /rule 로 여기에 추가됩니다 -->
 
 ## Memory
