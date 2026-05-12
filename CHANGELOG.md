@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/nogamsung/claude-ops/compare/v0.4.0...v0.4.1) (2026-05-12)
+
+
+### Miscellaneous Chores
+
+* **harness:** update Claude Code Starter to v1.36.0 ([#33](https://github.com/nogamsung/claude-ops/issues/33)) ([2aae3b5](https://github.com/nogamsung/claude-ops/commit/2aae3b5e5c9d1a2d39e2d4ae91d9615845b2fe7d))
+
 ## [0.4.0](https://github.com/nogamsung/claude-ops/compare/v0.3.0...v0.4.0) (2026-05-08)
 
 
