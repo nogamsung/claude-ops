@@ -34,4 +34,23 @@ fi
 # 4) MEMORY.md 존재하면 알림 (내용은 CLAUDE.md 가 자동 로드하니 여기선 힌트만)
 [ -f memory/MEMORY.md ] && echo "[Memory] memory/MEMORY.md 로드 가능"
 
+# 5) enabledPlugins 표시 (settings.json + settings.local.json 합쳐서)
+if command -v jq &>/dev/null; then
+  PLUGINS=$(jq -r '.enabledPlugins // {} | to_entries[] | select(.value==true) | .key' \
+              .claude/settings.json .claude/settings.local.json 2>/dev/null \
+              | sort -u | paste -sd, -)
+  if [ -n "$PLUGINS" ]; then
+    echo "[Plugins] $PLUGINS"
+    echo "  ↳ 미설치 시: /plugin install <name>  ·  활성/비활성: /plugin"
+  fi
+fi
+
+# 6) Telemetry 요약 (opt-in — settings.local.json 의 telemetry: true 일 때만)
+if command -v jq &>/dev/null && [ -f .claude/.usage.json ]; then
+  TOP5=$(jq -r '.tools | to_entries | sort_by(-.value) | .[:5] | .[] | "\(.key)=\(.value)"' \
+           .claude/.usage.json 2>/dev/null | paste -sd, -)
+  SINCE=$(jq -r '.since // "?"' .claude/.usage.json 2>/dev/null)
+  [ -n "$TOP5" ] && echo "[Usage] since=$SINCE · top5: $TOP5"
+fi
+
 exit 0
