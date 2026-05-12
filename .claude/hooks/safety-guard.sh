@@ -34,6 +34,26 @@ case "$CMD" in
     ;;
 esac
 
+# Secret 파일 commit 차단 (모든 브랜치) — git commit 시점에 staged 파일 검사
+case "$CMD" in
+  *"git commit"*)
+    if git rev-parse --git-dir &>/dev/null; then
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        BN=$(basename "$f")
+        case "$BN" in
+          .env|.env.local|.env.production|.env.development|.env.staging|*.pem|*.key|id_rsa|id_dsa|id_ecdsa|id_ed25519|*.p12|*.pfx|credentials.json|.npmrc|.pypirc)
+            echo "[SafetyGuard] 차단: secret 파일 commit 시도 ($f)" >&2
+            echo "  → echo '$f' >> .gitignore && git rm --cached '$f'" >&2
+            echo "  → .env.example / *.pub 같은 예시·공개 파일은 OK" >&2
+            exit 2
+            ;;
+        esac
+      done < <(git diff --cached --name-only 2>/dev/null)
+    fi
+    ;;
+esac
+
 # 보호 브랜치 감지
 if git rev-parse --git-dir &>/dev/null; then
   BRANCH=$(git branch --show-current 2>/dev/null || echo "")
